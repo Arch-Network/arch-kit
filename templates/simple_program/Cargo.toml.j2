@@ -1,0 +1,28 @@
+[package]
+name = "{{ package_name }}"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "{{ crate_name }}"
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = []
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+idl-build = ["arch-satellite-lang/idl-build"]
+satellite-debug = ["arch-satellite-lang/satellite-debug"]
+
+[dependencies]
+arch-satellite-lang = "={{ satellite_version }}"
+# Keep Satellite's transitive graph compatible with cargo-build-sbf's Rust 1.84 toolchain.
+zeroize = "=1.8.1"
+
+[build-dependencies]
+indexmap = "=2.11.0"
+proc-macro-crate = "=3.3.0"
+unicode-segmentation = "=1.12.0"

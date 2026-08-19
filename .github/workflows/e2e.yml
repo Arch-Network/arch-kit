@@ -19,7 +19,7 @@ env:
 
 jobs:
   e2e:
-    name: Key Management
+    name: CLI Workflows
     runs-on: blacksmith-4vcpu-ubuntu-2404
 
     steps:
@@ -51,3 +51,47 @@ jobs:
           fi
 
           echo "Verified generated public key: ${public_key}"
+
+      - name: Install SBF toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl -sSfL "https://release.anza.xyz/v3.1.9/install" | sh
+          sbf_bin="${HOME}/.local/share/solana/install/active_release/bin"
+          echo "${sbf_bin}" >> "${GITHUB_PATH}"
+          "${sbf_bin}/cargo-build-sbf" --version
+
+      - name: Initialize and build test program
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          e2e_root="${RUNNER_TEMP}/arch-kit-program-e2e"
+          authority_key="${e2e_root}/authority.key"
+          program_key="${e2e_root}/program.key"
+          program_dir="${e2e_root}/hello-world"
+          artifact_dir="${e2e_root}/artifacts"
+
+          mkdir -p "${e2e_root}" "${artifact_dir}"
+          ./target/release/arch-kit keygen "${authority_key}" "${program_key}"
+          ./target/release/arch-kit init "${program_dir}" --program-key "${program_key}"
+          cargo-build-sbf \
+            --manifest-path "${program_dir}/Cargo.toml" \
+            --sbf-out-dir "${artifact_dir}"
+          test -s "${artifact_dir}/hello_world.so"
+
+      - name: Deploy generated program to testnet
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          e2e_root="${RUNNER_TEMP}/arch-kit-program-e2e"
+          ./target/release/arch-kit \
+            --rpc-url https://rpc.testnet.arch.network \
+            --bitcoin-network testnet \
+            deploy \
+            --elf "${e2e_root}/artifacts/hello_world.so" \
+            --program-key "${e2e_root}/program.key" \
+            --authority "${e2e_root}/authority.key" \
+            --fund-authority

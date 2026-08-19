@@ -24,10 +24,17 @@ After pulling changes, update the installed binary with:
 cargo install --path . --force
 ```
 
+## Program development
+
+Programs using Satellite require Rust nightly during the IDL-building step.
+Install it with `rustup toolchain install nightly`; Satellite's
+[IDL builder explicitly selects the nightly toolchain](https://docs.rs/arch-satellite-lang-idl/0.31.5/src/arch_satellite_lang_idl/build.rs.html#141-146).
+
 ## Commands
 
 | Command | Usage | Description |
 | --- | --- | --- |
+| [`init`](#initialize-a-program) | `arch-kit init <PATH> --program-key <PATH>` | Initialize a new Satellite Hello World program. |
 | [`keygen`](#generate-keys) | `arch-kit keygen [OPTIONS] <PATH>...` | Generate one or more secp256k1 key files, with optional public key prefixes (vanity). |
 | [`pubkey`](#derive-a-public-key) | `arch-kit pubkey <PATH>` | Derive a Base58 Arch public key from a secret key file. |
 | [`deploy`](#deploy-a-program) | `arch-kit deploy [OPTIONS]` | Deploy or update a program and its IDL. |
@@ -48,6 +55,20 @@ Explicit arguments override environment variables and defaults. Place them
 before the command, for example `arch-kit --bitcoin-network regtest deploy ...`.
 Supported networks are `mainnet`, `testnet`, `testnet4`, `signet`, and
 `regtest`.
+
+## Initialize a program
+
+```bash
+arch-kit init ./hello-world --program-key ./keys/program.key
+```
+
+The destination must not exist. The command creates a Satellite program whose
+declared ID is derived from the supplied program key. Its `say_hello`
+instruction requires a user signer and logs `Hello <USER_BASE58_PUBKEY>`; the
+signature constraint uses the custom error defined in `src/error.rs`. The
+secret key is read only and is not copied into the project.
+
+Build the generated program with `cargo build-sbf` from its project directory.
 
 ## Check node health
 

@@ -1,0 +1,24 @@
+use arch_satellite_lang::prelude::*;
+
+use crate::error::HelloWorldError;
+
+declare_id!("{{ program_id_hex }}");
+
+pub mod error;
+
+#[program]
+pub mod {{ module_name }} {
+    use super::*;
+
+    pub fn say_hello(ctx: Context<SayHello>) -> Result<()> {
+        msg!("Hello {}", ctx.accounts.user.key());
+        Ok(())
+    }
+}
+
+#[derive(Accounts)]
+pub struct SayHello<'info> {
+    /// User whose Base58 public key is written to the program log.
+    #[account(signer @ HelloWorldError::UserMustSign)]
+    pub user: UncheckedAccount<'info>,
+}

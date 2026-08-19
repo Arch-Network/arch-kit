@@ -39,6 +39,23 @@ pub(crate) enum CliError {
         source: std::io::Error,
     },
 
+    #[error("failed to initialize program project at {path}: {source}")]
+    InitializeProgram {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("program template is not valid UTF-8: {path}")]
+    InvalidProgramTemplate { path: PathBuf },
+
+    #[error("failed to render program template {path}: {source}")]
+    RenderProgramTemplate {
+        path: PathBuf,
+        #[source]
+        source: minijinja::Error,
+    },
+
     #[error("vanity key search failed: {0}")]
     VanitySearch(String),
 

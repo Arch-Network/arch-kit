@@ -1,0 +1,20 @@
+# {{ package_name }}
+
+A simple [Satellite](https://github.com/Arch-Network/satellite) program for Arch Network.
+
+Program ID: `{{ program_id_base58 }}`
+
+## Build
+
+```bash
+cargo build-sbf
+```
+
+Satellite IDL generation requires Rust nightly:
+
+```bash
+rustup toolchain install nightly
+```
+
+The `say_hello` instruction requires one user signer and logs
+`Hello <USER_BASE58_PUBKEY>`.

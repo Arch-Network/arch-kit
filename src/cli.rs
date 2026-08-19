@@ -35,6 +35,9 @@ pub(crate) struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum Command {
+    /// Initialize a new Satellite program from an existing program key.
+    Init(InitArgs),
+
     /// Deploy or update a program and optionally publish its IDL.
     Deploy(DeployArgs),
 
@@ -46,6 +49,17 @@ pub(crate) enum Command {
 
     /// Check whether the configured Arch node is ready and its chain is progressing.
     Health,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct InitArgs {
+    /// Destination for the new program project. The path must not exist.
+    #[arg(value_name = "PATH")]
+    pub(crate) path: PathBuf,
+
+    /// Existing program identity key used to declare the program ID.
+    #[arg(long, value_name = "PATH")]
+    pub(crate) program_key: PathBuf,
 }
 
 #[derive(Debug, Args)]
@@ -160,6 +174,29 @@ mod tests {
         assert!(!args.generate_if_missing);
         assert_eq!(args.idl_size, Some(20_000));
         assert_eq!(args.idl, Some(PathBuf::from("program.idl.json")));
+    }
+
+    #[test]
+    fn parses_init_with_a_destination_and_program_key() {
+        let cli = Cli::try_parse_from([
+            "arch-kit",
+            "init",
+            "hello-world",
+            "--program-key",
+            "program.key",
+        ])
+        .unwrap();
+
+        let Command::Init(args) = cli.command else {
+            panic!("expected init command");
+        };
+        assert_eq!(args.path, PathBuf::from("hello-world"));
+        assert_eq!(args.program_key, PathBuf::from("program.key"));
+    }
+
+    #[test]
+    fn init_requires_a_program_key() {
+        assert!(Cli::try_parse_from(["arch-kit", "init", "hello-world"]).is_err());
     }
 
     #[test]
