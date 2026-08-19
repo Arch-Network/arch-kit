@@ -3,18 +3,31 @@ use std::path::PathBuf;
 use bitcoin::Network;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+pub(crate) const DEFAULT_RPC_URL: &str = "https://rpc.testnet.arch.network";
+
 #[derive(Debug, Parser)]
 #[command(name = "arch-kit")]
 #[command(about = "Program interaction toolkit for Arch Network")]
 #[command(version)]
 pub(crate) struct Cli {
     /// Arch JSON-RPC endpoint.
-    #[arg(long, env = "ARCH_RPC_URL", value_name = "URL")]
-    pub(crate) rpc_url: Option<String>,
+    #[arg(
+        long,
+        env = "ARCH_RPC_URL",
+        default_value = DEFAULT_RPC_URL,
+        value_name = "URL"
+    )]
+    pub(crate) rpc_url: String,
 
     /// Bitcoin network used for BIP-322 transaction signatures.
-    #[arg(long, env = "ARCH_BITCOIN_NETWORK", value_enum, value_name = "NETWORK")]
-    pub(crate) bitcoin_network: Option<BitcoinNetwork>,
+    #[arg(
+        long,
+        env = "ARCH_BITCOIN_NETWORK",
+        default_value = "testnet",
+        value_enum,
+        value_name = "NETWORK"
+    )]
+    pub(crate) bitcoin_network: BitcoinNetwork,
 
     #[command(subcommand)]
     pub(crate) command: Command,
@@ -171,9 +184,14 @@ mod tests {
             .unwrap();
 
         assert_eq!(rpc_url.get_env(), Some(OsStr::new("ARCH_RPC_URL")));
+        assert_eq!(rpc_url.get_default_values(), [OsStr::new(DEFAULT_RPC_URL)]);
         assert_eq!(
             bitcoin_network.get_env(),
             Some(OsStr::new("ARCH_BITCOIN_NETWORK"))
+        );
+        assert_eq!(
+            bitcoin_network.get_default_values(),
+            [OsStr::new("testnet")]
         );
         assert_eq!(Network::from(BitcoinNetwork::Mainnet), Network::Bitcoin);
         assert_eq!(Network::from(BitcoinNetwork::Testnet4), Network::Testnet4);
@@ -192,8 +210,6 @@ mod tests {
         );
         assert!(args.prefix.is_none());
         assert!(args.threads.is_none());
-        assert!(cli.rpc_url.is_none());
-        assert!(cli.bitcoin_network.is_none());
     }
 
     #[test]

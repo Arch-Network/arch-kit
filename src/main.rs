@@ -30,19 +30,11 @@ fn run() -> Result<()> {
     match command {
         Command::Keygen(args) => keys::run_keygen(args),
         Command::Deploy(args) => {
-            let rpc_url = rpc_url.ok_or_else(|| {
-                CliError::InvalidArgument("deploy requires --rpc-url or ARCH_RPC_URL".to_string())
-            })?;
             if rpc_url.trim().is_empty() {
                 return Err(CliError::InvalidArgument(
                     "--rpc-url/ARCH_RPC_URL must not be empty".to_string(),
                 ));
             }
-            let bitcoin_network = bitcoin_network.ok_or_else(|| {
-                CliError::InvalidArgument(
-                    "deploy requires --bitcoin-network or ARCH_BITCOIN_NETWORK".to_string(),
-                )
-            })?;
             let config = Config {
                 arch_node_url: rpc_url,
                 network: bitcoin_network.into(),

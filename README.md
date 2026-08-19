@@ -33,6 +33,20 @@ cargo install --path . --force
 
 Run `arch-kit <COMMAND> --help` for the complete option list.
 
+## Network configuration
+
+Networked commands share these top-level settings:
+
+| Setting | CLI argument | Environment variable | Default |
+| --- | --- | --- | --- |
+| Arch RPC | `--rpc-url <URL>` | `ARCH_RPC_URL` | `https://rpc.testnet.arch.network` |
+| Bitcoin network | `--bitcoin-network <NETWORK>` | `ARCH_BITCOIN_NETWORK` | `testnet` |
+
+Explicit arguments override environment variables and defaults. Place them
+before the command, for example `arch-kit --bitcoin-network regtest deploy ...`.
+Supported networks are `mainnet`, `testnet`, `testnet4`, `signet`, and
+`regtest`.
+
 ## Generate keys
 
 Generate one or several independent keys:
@@ -59,19 +73,14 @@ distributed.
 ## Deploy a program
 
 ```bash
-arch-kit \
-  --rpc-url http://127.0.0.1:9002 \
-  --bitcoin-network regtest \
-  deploy \
+arch-kit deploy \
   --elf ./target/deploy/example.so \
   --program-key ./keys/program.key \
   --authority ./keys/authority.key
 ```
 
-The connection options can instead use `ARCH_RPC_URL` and
-`ARCH_BITCOIN_NETWORK`. Supported networks are `mainnet`, `testnet`, `testnet4`,
-`signet`, and `regtest`. Key files may contain a secp256k1 secret-key string or
-an SDK-compatible JSON byte array.
+Key files may contain a secp256k1 secret-key string or an SDK-compatible JSON
+byte array.
 
 Useful deployment options:
 
