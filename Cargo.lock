@@ -73,9 +73,11 @@ version = "0.1.0"
 dependencies = [
  "arch_sdk",
  "bitcoin",
+ "bs58",
  "clap",
  "flate2",
  "hex",
+ "rand 0.8.7",
  "serde_json",
  "tempfile",
  "thiserror 2.0.20",

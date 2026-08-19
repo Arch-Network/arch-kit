@@ -10,11 +10,11 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 pub(crate) struct Cli {
     /// Arch JSON-RPC endpoint.
     #[arg(long, env = "ARCH_RPC_URL", value_name = "URL")]
-    pub(crate) rpc_url: String,
+    pub(crate) rpc_url: Option<String>,
 
     /// Bitcoin network used for BIP-322 transaction signatures.
     #[arg(long, env = "ARCH_BITCOIN_NETWORK", value_enum, value_name = "NETWORK")]
-    pub(crate) bitcoin_network: BitcoinNetwork,
+    pub(crate) bitcoin_network: Option<BitcoinNetwork>,
 
     #[command(subcommand)]
     pub(crate) command: Command,
@@ -24,6 +24,24 @@ pub(crate) struct Cli {
 pub(crate) enum Command {
     /// Deploy or update a program and optionally publish its IDL.
     Deploy(DeployArgs),
+
+    /// Generate one or more new secp256k1 secret key files.
+    Keygen(KeygenArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct KeygenArgs {
+    /// Require each generated Arch public key to start with this Base58 prefix.
+    #[arg(long, value_name = "BASE58_PREFIX")]
+    pub(crate) prefix: Option<String>,
+
+    /// Maximum parallel search threads for vanity key generation.
+    #[arg(long, requires = "prefix", value_name = "COUNT")]
+    pub(crate) threads: Option<usize>,
+
+    /// Destinations for new secret keys. The files must not already exist.
+    #[arg(value_name = "PATH", required = true, num_args = 1..)]
+    pub(crate) outputs: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -39,6 +57,10 @@ pub(crate) struct DeployArgs {
     /// Existing deployment and IDL authority keypair.
     #[arg(long, value_name = "PATH")]
     pub(crate) authority: PathBuf,
+
+    /// Securely generate any missing program or authority key file.
+    #[arg(long)]
+    pub(crate) generate_if_missing: bool,
 
     /// Fund the authority through the configured Arch RPC faucet before deployment.
     #[arg(long)]
@@ -105,8 +127,11 @@ mod tests {
         ])
         .unwrap();
 
-        let Command::Deploy(args) = cli.command;
+        let Command::Deploy(args) = cli.command else {
+            panic!("expected deploy command");
+        };
         assert!(args.fund_authority);
+        assert!(!args.generate_if_missing);
         assert_eq!(args.idl_size, Some(20_000));
         assert_eq!(args.idl, Some(PathBuf::from("program.idl.json")));
     }
@@ -152,5 +177,79 @@ mod tests {
         );
         assert_eq!(Network::from(BitcoinNetwork::Mainnet), Network::Bitcoin);
         assert_eq!(Network::from(BitcoinNetwork::Testnet4), Network::Testnet4);
+    }
+
+    #[test]
+    fn keygen_accepts_one_or_more_positional_paths_without_connection_options() {
+        let cli = Cli::try_parse_from(["arch-kit", "keygen", "first.key", "second.key"]).unwrap();
+
+        let Command::Keygen(args) = cli.command else {
+            panic!("expected keygen command");
+        };
+        assert_eq!(
+            args.outputs,
+            [PathBuf::from("first.key"), PathBuf::from("second.key")]
+        );
+        assert!(args.prefix.is_none());
+        assert!(args.threads.is_none());
+        assert!(cli.rpc_url.is_none());
+        assert!(cli.bitcoin_network.is_none());
+    }
+
+    #[test]
+    fn keygen_requires_at_least_one_path() {
+        assert!(Cli::try_parse_from(["arch-kit", "keygen"]).is_err());
+    }
+
+    #[test]
+    fn keygen_accepts_a_vanity_prefix_and_thread_limit() {
+        let cli = Cli::try_parse_from([
+            "arch-kit",
+            "keygen",
+            "--prefix",
+            "PAMM",
+            "--threads",
+            "4",
+            "program.key",
+        ])
+        .unwrap();
+
+        let Command::Keygen(args) = cli.command else {
+            panic!("expected keygen command");
+        };
+        assert_eq!(args.prefix.as_deref(), Some("PAMM"));
+        assert_eq!(args.threads, Some(4));
+    }
+
+    #[test]
+    fn keygen_rejects_threads_without_a_prefix() {
+        assert!(
+            Cli::try_parse_from(["arch-kit", "keygen", "--threads", "2", "program.key"]).is_err()
+        );
+    }
+
+    #[test]
+    fn deploy_accepts_generate_if_missing() {
+        let cli = Cli::try_parse_from([
+            "arch-kit",
+            "--rpc-url",
+            "http://127.0.0.1:9002",
+            "--bitcoin-network",
+            "regtest",
+            "deploy",
+            "--elf",
+            "program.so",
+            "--program-key",
+            "program.key",
+            "--authority",
+            "authority.key",
+            "--generate-if-missing",
+        ])
+        .unwrap();
+
+        let Command::Deploy(args) = cli.command else {
+            panic!("expected deploy command");
+        };
+        assert!(args.generate_if_missing);
     }
 }

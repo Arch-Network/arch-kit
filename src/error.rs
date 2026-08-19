@@ -31,6 +31,17 @@ pub(crate) enum CliError {
         source: std::io::Error,
     },
 
+    #[error("failed to create {label} {path}: {source}")]
+    CreateKey {
+        label: &'static str,
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("vanity key search failed: {0}")]
+    VanitySearch(String),
+
     #[error("IDL JSON is invalid: {0}")]
     InvalidIdl(String),
 

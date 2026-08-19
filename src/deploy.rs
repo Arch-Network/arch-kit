@@ -9,7 +9,7 @@ use crate::{
     cli::DeployArgs,
     error::{CliError, Result},
     idl,
-    keys::{load_existing_key, pubkey_hex},
+    keys::{load_or_generate_key, pubkey_hex},
 };
 
 pub(crate) fn run(config: &Config, args: DeployArgs) -> Result<()> {
@@ -21,9 +21,31 @@ pub(crate) fn run(config: &Config, args: DeployArgs) -> Result<()> {
         source,
     })?;
 
-    let (program_keypair, program_pubkey) = load_existing_key(&args.program_key, "program key")?;
-    let (authority_keypair, authority_pubkey) =
-        load_existing_key(&args.authority, "authority key")?;
+    let (program_keypair, program_pubkey, generated_program_key) = load_or_generate_key(
+        &args.program_key,
+        "program key",
+        config.network,
+        args.generate_if_missing,
+    )?;
+    let (authority_keypair, authority_pubkey, generated_authority_key) = load_or_generate_key(
+        &args.authority,
+        "authority key",
+        config.network,
+        args.generate_if_missing,
+    )?;
+
+    if generated_program_key {
+        println!(
+            "Generated missing program key: {}",
+            args.program_key.display()
+        );
+    }
+    if generated_authority_key {
+        println!(
+            "Generated missing authority key: {}",
+            args.authority.display()
+        );
+    }
 
     let prepared_idl = args
         .idl

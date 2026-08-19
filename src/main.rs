@@ -3,6 +3,7 @@ mod deploy;
 mod error;
 mod idl;
 mod keys;
+mod vanity;
 
 use arch_sdk::Config;
 use clap::Parser;
@@ -20,23 +21,38 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    let cli = Cli::parse();
-    if cli.rpc_url.trim().is_empty() {
-        return Err(CliError::InvalidArgument(
-            "--rpc-url/ARCH_RPC_URL must not be empty".to_string(),
-        ));
-    }
+    let Cli {
+        rpc_url,
+        bitcoin_network,
+        command,
+    } = Cli::parse();
 
-    let config = Config {
-        arch_node_url: cli.rpc_url,
-        network: cli.bitcoin_network.into(),
-        node_endpoint: String::new(),
-        node_username: String::new(),
-        node_password: String::new(),
-        titan_url: String::new(),
-    };
+    match command {
+        Command::Keygen(args) => keys::run_keygen(args),
+        Command::Deploy(args) => {
+            let rpc_url = rpc_url.ok_or_else(|| {
+                CliError::InvalidArgument("deploy requires --rpc-url or ARCH_RPC_URL".to_string())
+            })?;
+            if rpc_url.trim().is_empty() {
+                return Err(CliError::InvalidArgument(
+                    "--rpc-url/ARCH_RPC_URL must not be empty".to_string(),
+                ));
+            }
+            let bitcoin_network = bitcoin_network.ok_or_else(|| {
+                CliError::InvalidArgument(
+                    "deploy requires --bitcoin-network or ARCH_BITCOIN_NETWORK".to_string(),
+                )
+            })?;
+            let config = Config {
+                arch_node_url: rpc_url,
+                network: bitcoin_network.into(),
+                node_endpoint: String::new(),
+                node_username: String::new(),
+                node_password: String::new(),
+                titan_url: String::new(),
+            };
 
-    match cli.command {
-        Command::Deploy(args) => deploy::run(&config, args),
+            deploy::run(&config, args)
+        }
     }
 }
