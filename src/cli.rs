@@ -41,8 +41,18 @@ pub(crate) enum Command {
     /// Generate one or more new secp256k1 secret key files.
     Keygen(KeygenArgs),
 
+    /// Derive an Arch public key from a secret key file.
+    Pubkey(PubkeyArgs),
+
     /// Check whether the configured Arch node is ready and its chain is progressing.
     Health,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct PubkeyArgs {
+    /// Secret key file to read.
+    #[arg(value_name = "PATH")]
+    pub(crate) secret_key: PathBuf,
 }
 
 #[derive(Debug, Args)]
@@ -245,6 +255,22 @@ mod tests {
         assert!(
             Cli::try_parse_from(["arch-kit", "keygen", "--threads", "2", "program.key"]).is_err()
         );
+    }
+
+    #[test]
+    fn pubkey_accepts_a_secret_key_path() {
+        let cli = Cli::try_parse_from(["arch-kit", "pubkey", "authority.key"]).unwrap();
+
+        let Command::Pubkey(args) = cli.command else {
+            panic!("expected pubkey command");
+        };
+        assert_eq!(args.secret_key, PathBuf::from("authority.key"));
+    }
+
+    #[test]
+    fn pubkey_requires_exactly_one_path() {
+        assert!(Cli::try_parse_from(["arch-kit", "pubkey"]).is_err());
+        assert!(Cli::try_parse_from(["arch-kit", "pubkey", "first.key", "second.key"]).is_err());
     }
 
     #[test]

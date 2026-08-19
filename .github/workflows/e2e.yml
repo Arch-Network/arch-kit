@@ -1,0 +1,53 @@
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arch-kit-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  e2e:
+    name: Key Management
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ""
+          cache-workspaces: |
+            . -> target
+
+      - name: Build arch-kit
+        run: cargo build --release --locked
+
+      - name: Vanity key generation round trip
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          key_path="${RUNNER_TEMP}/ab.key"
+          ./target/release/arch-kit keygen --prefix AB "${key_path}"
+
+          public_key="$(./target/release/arch-kit pubkey "${key_path}")"
+          if [[ "${public_key}" != AB* ]]; then
+            echo "Expected a public key starting with AB, got: ${public_key}" >&2
+            exit 1
+          fi
+
+          echo "Verified generated public key: ${public_key}"

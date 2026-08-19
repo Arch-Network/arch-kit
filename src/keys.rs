@@ -8,7 +8,7 @@ use bitcoin::{
 };
 
 use crate::{
-    cli::KeygenArgs,
+    cli::{KeygenArgs, PubkeyArgs},
     error::{CliError, Result},
     vanity::VanitySearch,
 };
@@ -152,6 +152,12 @@ pub(crate) fn run_keygen(args: KeygenArgs) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn run_pubkey(args: PubkeyArgs) -> Result<()> {
+    let (_, pubkey) = load_existing_key(&args.secret_key, "secret key")?;
+    println!("{pubkey}");
+    Ok(())
+}
+
 fn preflight_keygen_paths(paths: &[std::path::PathBuf]) -> Result<()> {
     let mut requested = HashSet::with_capacity(paths.len());
     for path in paths {
@@ -236,6 +242,24 @@ mod tests {
         let from_json = parse_secret_key(&json).unwrap();
 
         assert_eq!(from_hex, from_json);
+    }
+
+    #[test]
+    fn derives_the_arch_x_only_public_key_from_a_secret_key_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("secret.key");
+        std::fs::write(&path, "01".repeat(32)).unwrap();
+
+        let (_, pubkey) = load_existing_key(&path, "test key").unwrap();
+
+        assert_eq!(
+            pubkey_hex(&pubkey),
+            "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f"
+        );
+        assert_eq!(
+            bs58::decode(pubkey.to_string()).into_vec().unwrap(),
+            pubkey.as_ref()
+        );
     }
 
     #[test]

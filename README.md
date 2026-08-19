@@ -29,6 +29,7 @@ cargo install --path . --force
 | Command | Usage | Description |
 | --- | --- | --- |
 | [`keygen`](#generate-keys) | `arch-kit keygen [OPTIONS] <PATH>...` | Generate one or more secp256k1 key files, with optional public key prefixes (vanity). |
+| [`pubkey`](#derive-a-public-key) | `arch-kit pubkey <PATH>` | Derive a Base58 Arch public key from a secret key file. |
 | [`deploy`](#deploy-a-program) | `arch-kit deploy [OPTIONS]` | Deploy or update a program and its IDL. |
 | [`health`](#check-node-health) | `arch-kit health` | Check validator readiness and block progression. |
 
@@ -80,6 +81,15 @@ Vanity search uses all available CPU parallelism by default. Each additional
 Base58 character increases the rough expected work by about 58 times; the
 estimate is only a baseline because first characters are not uniformly
 distributed.
+
+## Derive a public key
+
+```bash
+arch-kit pubkey ./keys/authority.key
+```
+
+The command reads either supported secret-key file format and writes only the
+derived Base58 Arch public key to standard output.
 
 ## Deploy a program
 
