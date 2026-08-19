@@ -28,8 +28,8 @@ cargo install --path . --force
 
 | Command | Description |
 | --- | --- |
-| `arch-kit keygen [OPTIONS] <PATH>...` | Generate one or more secp256k1 key files, optionally searching for an Arch public-key prefix. |
-| `arch-kit deploy [OPTIONS]` | Deploy or update a program and optionally fund its authority and publish its IDL. |
+| `arch-kit keygen [OPTIONS] <PATH>...` | Generate one or more secp256k1 key files, with optional public key prefixes (vanity) |
+| `arch-kit deploy [OPTIONS]` | Deploy or update a program and its IDL. |
 
 Run `arch-kit <COMMAND> --help` for the complete option list.
 
