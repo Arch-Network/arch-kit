@@ -30,7 +30,7 @@ cargo install --path . --force
 | --- | --- | --- |
 | [`keygen`](#generate-keys) | `arch-kit keygen [OPTIONS] <PATH>...` | Generate one or more secp256k1 key files, with optional public key prefixes (vanity). |
 | [`deploy`](#deploy-a-program) | `arch-kit deploy [OPTIONS]` | Deploy or update a program and its IDL. |
-| [`health`](#check-node-health) | `arch-kit health [OPTIONS]` | Check validator readiness and block progression. |
+| [`health`](#check-node-health) | `arch-kit health` | Check validator readiness and block progression. |
 
 Run `arch-kit <COMMAND> --help` for the complete option list.
 
@@ -56,8 +56,7 @@ arch-kit health
 
 The command checks validator readiness, reports RPC latency, and samples the
 block height twice. It exits successfully only when the node is ready and the
-height increases during the two-second default observation window. Use
-`--progress-window <SECONDS>` to change that window.
+height increases during its two-second observation window.
 
 ## Generate keys
 

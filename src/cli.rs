@@ -1,4 +1,4 @@
-use std::{num::NonZeroU64, path::PathBuf};
+use std::path::PathBuf;
 
 use bitcoin::Network;
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -42,14 +42,7 @@ pub(crate) enum Command {
     Keygen(KeygenArgs),
 
     /// Check whether the configured Arch node is ready and its chain is progressing.
-    Health(HealthArgs),
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct HealthArgs {
-    /// Seconds over which to verify that the block height increases.
-    #[arg(long, default_value = "2", value_name = "SECONDS")]
-    pub(crate) progress_window: NonZeroU64,
+    Health,
 }
 
 #[derive(Debug, Args)]
@@ -266,23 +259,14 @@ mod tests {
         ])
         .unwrap();
 
-        let Command::Health(args) = cli.command else {
-            panic!("expected health command");
-        };
-        assert_eq!(args.progress_window.get(), 2);
+        assert!(matches!(cli.command, Command::Health));
         assert_eq!(cli.rpc_url, "http://127.0.0.1:9002");
         assert_eq!(cli.bitcoin_network, BitcoinNetwork::Regtest);
     }
 
     #[test]
-    fn health_accepts_a_custom_nonzero_progress_window() {
-        let cli = Cli::try_parse_from(["arch-kit", "health", "--progress-window", "5"]).unwrap();
-
-        let Command::Health(args) = cli.command else {
-            panic!("expected health command");
-        };
-        assert_eq!(args.progress_window.get(), 5);
-        assert!(Cli::try_parse_from(["arch-kit", "health", "--progress-window", "0"]).is_err());
+    fn health_does_not_expose_the_progress_window() {
+        assert!(Cli::try_parse_from(["arch-kit", "health", "--progress-window", "5"]).is_err());
     }
 
     #[test]

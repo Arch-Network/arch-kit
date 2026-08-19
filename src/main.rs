@@ -30,7 +30,7 @@ fn run() -> Result<()> {
 
     match command {
         Command::Keygen(args) => keys::run_keygen(args),
-        Command::Health(args) => health::run(&network_config(rpc_url, bitcoin_network)?, args),
+        Command::Health => health::run(&network_config(rpc_url, bitcoin_network)?),
         Command::Deploy(args) => deploy::run(&network_config(rpc_url, bitcoin_network)?, args),
     }
 }

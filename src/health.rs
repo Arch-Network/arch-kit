@@ -5,14 +5,12 @@ use std::{
 
 use arch_sdk::{Config, blocking::ArchRpcClient};
 
-use crate::{
-    cli::HealthArgs,
-    error::{CliError, Result},
-};
+use crate::error::{CliError, Result};
 
 const IS_NODE_READY: &str = "is_node_ready";
+const BLOCK_PROGRESS_WINDOW: Duration = Duration::from_secs(2);
 
-pub(crate) fn run(config: &Config, args: HealthArgs) -> Result<()> {
+pub(crate) fn run(config: &Config) -> Result<()> {
     let started_at = Instant::now();
     let client = ArchRpcClient::new(config);
     let latency_started_at = Instant::now();
@@ -25,8 +23,7 @@ pub(crate) fn run(config: &Config, args: HealthArgs) -> Result<()> {
     let initial_height = client
         .get_block_count()
         .map_err(|source| health_rpc_error(config, source))?;
-    let observation_seconds = args.progress_window.get();
-    thread::sleep(Duration::from_secs(observation_seconds));
+    thread::sleep(BLOCK_PROGRESS_WINDOW);
 
     let final_height = client
         .get_block_count()
@@ -34,7 +31,7 @@ pub(crate) fn run(config: &Config, args: HealthArgs) -> Result<()> {
     require_progress(
         initial_height,
         final_height,
-        observation_seconds,
+        BLOCK_PROGRESS_WINDOW.as_secs(),
         &config.arch_node_url,
     )?;
 
@@ -45,7 +42,7 @@ pub(crate) fn run(config: &Config, args: HealthArgs) -> Result<()> {
         final_height - initial_height
     );
     println!("  RPC latency: {}ms", rpc_latency.as_millis());
-    println!("  Progress window: {observation_seconds}s");
+    println!("  Progress window: {}s", BLOCK_PROGRESS_WINDOW.as_secs());
     println!("  Total check time: {}ms", started_at.elapsed().as_millis());
     Ok(())
 }
@@ -94,6 +91,7 @@ mod tests {
     #[test]
     fn uses_the_validator_readiness_rpc_method() {
         assert_eq!(IS_NODE_READY, "is_node_ready");
+        assert_eq!(BLOCK_PROGRESS_WINDOW, Duration::from_secs(2));
     }
 
     #[test]
