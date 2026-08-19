@@ -42,6 +42,29 @@ pub(crate) enum CliError {
     #[error("vanity key search failed: {0}")]
     VanitySearch(String),
 
+    #[error("Arch node is not ready: {rpc_url}")]
+    NodeNotReady { rpc_url: String },
+
+    #[error("Arch node returned no readiness result: {rpc_url}")]
+    NodeHealthUnavailable { rpc_url: String },
+
+    #[error("failed to check Arch node {rpc_url}: {source}")]
+    NodeHealthRpc {
+        rpc_url: String,
+        #[source]
+        source: arch_sdk::ArchError,
+    },
+
+    #[error(
+        "Arch node blocks are not progressing at {rpc_url}: height changed from {initial_height} to {final_height} over {observation_seconds}s"
+    )]
+    BlocksNotProgressing {
+        rpc_url: String,
+        initial_height: u64,
+        final_height: u64,
+        observation_seconds: u64,
+    },
+
     #[error("IDL JSON is invalid: {0}")]
     InvalidIdl(String),
 

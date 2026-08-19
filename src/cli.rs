@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{num::NonZeroU64, path::PathBuf};
 
 use bitcoin::Network;
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -40,6 +40,16 @@ pub(crate) enum Command {
 
     /// Generate one or more new secp256k1 secret key files.
     Keygen(KeygenArgs),
+
+    /// Check whether the configured Arch node is ready and its chain is progressing.
+    Health(HealthArgs),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct HealthArgs {
+    /// Seconds over which to verify that the block height increases.
+    #[arg(long, default_value = "2", value_name = "SECONDS")]
+    pub(crate) progress_window: NonZeroU64,
 }
 
 #[derive(Debug, Args)]
@@ -242,6 +252,37 @@ mod tests {
         assert!(
             Cli::try_parse_from(["arch-kit", "keygen", "--threads", "2", "program.key"]).is_err()
         );
+    }
+
+    #[test]
+    fn parses_health_with_shared_network_configuration() {
+        let cli = Cli::try_parse_from([
+            "arch-kit",
+            "--rpc-url",
+            "http://127.0.0.1:9002",
+            "--bitcoin-network",
+            "regtest",
+            "health",
+        ])
+        .unwrap();
+
+        let Command::Health(args) = cli.command else {
+            panic!("expected health command");
+        };
+        assert_eq!(args.progress_window.get(), 2);
+        assert_eq!(cli.rpc_url, "http://127.0.0.1:9002");
+        assert_eq!(cli.bitcoin_network, BitcoinNetwork::Regtest);
+    }
+
+    #[test]
+    fn health_accepts_a_custom_nonzero_progress_window() {
+        let cli = Cli::try_parse_from(["arch-kit", "health", "--progress-window", "5"]).unwrap();
+
+        let Command::Health(args) = cli.command else {
+            panic!("expected health command");
+        };
+        assert_eq!(args.progress_window.get(), 5);
+        assert!(Cli::try_parse_from(["arch-kit", "health", "--progress-window", "0"]).is_err());
     }
 
     #[test]
