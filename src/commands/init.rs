@@ -9,7 +9,6 @@ use include_dir::{Dir, include_dir};
 use minijinja::{AutoEscape, Environment, UndefinedBehavior, Value, context};
 
 use crate::{
-    cli::InitArgs,
     error::{CliError, Result},
     keys::{load_existing_key, pubkey_hex},
 };
@@ -18,7 +17,18 @@ const SATELLITE_VERSION: &str = "0.31.5";
 static SIMPLE_PROGRAM_TEMPLATE: Dir<'_> =
     include_dir!("$CARGO_MANIFEST_DIR/templates/simple_program");
 
-pub(crate) fn run(args: InitArgs) -> Result<()> {
+#[derive(Debug, clap::Args)]
+pub(crate) struct Args {
+    /// Destination for the new program project. The path must not exist.
+    #[arg(value_name = "PATH")]
+    pub(crate) path: PathBuf,
+
+    /// Existing program identity key used to declare the program ID.
+    #[arg(long, value_name = "PATH")]
+    pub(crate) program_key: PathBuf,
+}
+
+pub(crate) fn run(args: Args) -> Result<()> {
     let (_, program_id) = load_existing_key(&args.program_key, "program key")?;
     let names = ProjectNames::from_path(&args.path)?;
     let program_id_hex = pubkey_hex(&program_id);
@@ -268,10 +278,37 @@ fn render_directory(
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
+
+    use crate::cli::{Cli, Command};
+
     use super::*;
 
     fn write_test_key(path: &Path) {
         fs::write(path, "01".repeat(32)).unwrap();
+    }
+
+    #[test]
+    fn parses_a_destination_and_program_key() {
+        let cli = Cli::try_parse_from([
+            "arch-kit",
+            "init",
+            "hello-world",
+            "--program-key",
+            "program.key",
+        ])
+        .unwrap();
+
+        let Command::Init(args) = cli.command else {
+            panic!("expected init command");
+        };
+        assert_eq!(args.path, PathBuf::from("hello-world"));
+        assert_eq!(args.program_key, PathBuf::from("program.key"));
+    }
+
+    #[test]
+    fn requires_a_program_key() {
+        assert!(Cli::try_parse_from(["arch-kit", "init", "hello-world"]).is_err());
     }
 
     #[test]
@@ -306,7 +343,7 @@ mod tests {
         write_test_key(&key_path);
         let (_, expected_program_id) = load_existing_key(&key_path, "test key").unwrap();
 
-        run(InitArgs {
+        run(Args {
             path: project_path.clone(),
             program_key: key_path,
         })
@@ -358,7 +395,7 @@ mod tests {
         fs::create_dir(&project_path).unwrap();
         fs::write(project_path.join("keep.txt"), "untouched").unwrap();
 
-        let result = run(InitArgs {
+        let result = run(Args {
             path: project_path.clone(),
             program_key: key_path,
         });

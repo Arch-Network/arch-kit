@@ -91,6 +91,16 @@ jobs:
             --sbf-out-dir "${artifact_dir}"
           test -s "${artifact_dir}/hello_world.so"
 
+      - name: Check testnet health before deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ./target/release/arch-kit \
+            --rpc-url https://rpc.testnet.arch.network \
+            --bitcoin-network testnet \
+            health
+
       - name: Deploy generated program to testnet
         shell: bash
         run: |

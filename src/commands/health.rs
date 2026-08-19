@@ -86,7 +86,36 @@ fn require_progress(
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
+
+    use crate::{
+        cli::{Cli, Command},
+        network::BitcoinNetwork,
+    };
+
     use super::*;
+
+    #[test]
+    fn parses_with_shared_network_configuration() {
+        let cli = Cli::try_parse_from([
+            "arch-kit",
+            "--rpc-url",
+            "http://127.0.0.1:9002",
+            "--bitcoin-network",
+            "regtest",
+            "health",
+        ])
+        .unwrap();
+
+        assert!(matches!(cli.command, Command::Health));
+        assert_eq!(cli.rpc_url, "http://127.0.0.1:9002");
+        assert_eq!(cli.bitcoin_network, BitcoinNetwork::Regtest);
+    }
+
+    #[test]
+    fn does_not_expose_the_progress_window() {
+        assert!(Cli::try_parse_from(["arch-kit", "health", "--progress-window", "5"]).is_err());
+    }
 
     #[test]
     fn uses_the_validator_readiness_rpc_method() {

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, fs::OpenOptions, io::Write, path::Path, str::FromStr};
+use std::{fs::OpenOptions, io::Write, path::Path, str::FromStr};
 
 use arch_sdk::{arch_program::pubkey::Pubkey, generate_new_keypair};
 use bitcoin::{
@@ -7,11 +7,7 @@ use bitcoin::{
     secp256k1::{Secp256k1, SecretKey},
 };
 
-use crate::{
-    cli::{KeygenArgs, PubkeyArgs},
-    error::{CliError, Result},
-    vanity::VanitySearch,
-};
+use crate::error::{CliError, Result};
 
 const SECRET_KEY_SIZE: usize = 32;
 
@@ -51,7 +47,7 @@ pub(crate) fn generate_key_file(
 }
 
 /// Persist a generated keypair without replacing any existing path.
-fn persist_key_file(path: &Path, label: &'static str, keypair: &Keypair) -> Result<()> {
+pub(crate) fn persist_key_file(path: &Path, label: &'static str, keypair: &Keypair) -> Result<()> {
     let encoded_secret = hex::encode(keypair.secret_bytes());
 
     let mut options = OpenOptions::new();
@@ -105,88 +101,6 @@ pub(crate) fn load_or_generate_key(
 
     let (keypair, pubkey) = load_existing_key(path, label)?;
     Ok((keypair, pubkey, false))
-}
-
-pub(crate) fn run_keygen(args: KeygenArgs) -> Result<()> {
-    preflight_keygen_paths(&args.outputs)?;
-
-    let vanity_search = args
-        .prefix
-        .as_deref()
-        .map(|prefix| VanitySearch::new(prefix, args.threads))
-        .transpose()?;
-
-    for output in args.outputs {
-        let (pubkey, vanity_stats) = if let Some(search) = &vanity_search {
-            eprintln!(
-                "Searching for public-key prefix {:?} for {} using {} thread(s)...",
-                search.prefix(),
-                output.display(),
-                search.thread_count()
-            );
-            eprintln!(
-                "  Rough uniform baseline: {:.3e} attempts",
-                search.rough_expected_attempts()
-            );
-            let outcome = search.run()?;
-            persist_key_file(&output, "secret key", &outcome.keypair)?;
-            (
-                outcome.pubkey,
-                Some((outcome.attempts, outcome.elapsed.as_secs_f64())),
-            )
-        } else {
-            // Secret keys are network-independent; the SDK's address result is unused.
-            let (_, pubkey) = generate_key_file(&output, "secret key", Network::Bitcoin)?;
-            (pubkey, None)
-        };
-
-        println!("Secret key generated securely.");
-        println!("  Path: {}", output.display());
-        println!("  Public key: {pubkey}");
-        println!("  Public key (hex): {}", pubkey_hex(&pubkey));
-        if let Some((attempts, elapsed_seconds)) = vanity_stats {
-            println!("  Vanity attempts: {attempts}");
-            println!("  Search time: {elapsed_seconds:.2}s");
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn run_pubkey(args: PubkeyArgs) -> Result<()> {
-    let (_, pubkey) = load_existing_key(&args.secret_key, "secret key")?;
-    println!("{pubkey}");
-    Ok(())
-}
-
-fn preflight_keygen_paths(paths: &[std::path::PathBuf]) -> Result<()> {
-    let mut requested = HashSet::with_capacity(paths.len());
-    for path in paths {
-        if !requested.insert(path.as_path()) {
-            return Err(CliError::InvalidArgument(format!(
-                "duplicate key destination: {}",
-                path.display()
-            )));
-        }
-
-        match std::fs::symlink_metadata(path) {
-            Ok(_) => {
-                return Err(CliError::CreateKey {
-                    label: "secret key",
-                    path: path.clone(),
-                    source: std::io::Error::from(std::io::ErrorKind::AlreadyExists),
-                });
-            }
-            Err(source) if source.kind() == std::io::ErrorKind::NotFound => {}
-            Err(source) => {
-                return Err(CliError::CreateKey {
-                    label: "secret key",
-                    path: path.clone(),
-                    source,
-                });
-            }
-        }
-    }
-    Ok(())
 }
 
 fn parse_secret_key(contents: &str) -> std::io::Result<SecretKey> {
@@ -328,16 +242,5 @@ mod tests {
 
         assert!(load_or_generate_key(&path, "test key", Network::Regtest, true).is_err());
         assert!(!target.exists());
-    }
-
-    #[test]
-    fn keygen_preflight_rejects_duplicates_and_existing_paths() {
-        let directory = tempfile::tempdir().unwrap();
-        let first = directory.path().join("first.key");
-        let second = directory.path().join("second.key");
-
-        assert!(preflight_keygen_paths(&[first.clone(), first]).is_err());
-        std::fs::write(&second, "existing").unwrap();
-        assert!(preflight_keygen_paths(&[directory.path().join("new.key"), second]).is_err());
     }
 }
