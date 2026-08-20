@@ -68,7 +68,12 @@ instruction requires a user signer and logs `Hello <USER_BASE58_PUBKEY>`; the
 signature constraint uses the custom error defined in `src/error.rs`. The
 secret key is read only and is not copied into the project.
 
-Build the generated program with `cargo build-sbf` from its project directory.
+Build the generated program from its project directory, or pass its manifest
+path explicitly:
+
+```bash
+cargo build-sbf --manifest-path ./hello-world/Cargo.toml
+```
 
 ## Check node health
 

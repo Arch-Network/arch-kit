@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+# Keep cargo-build-sbf's bundled Cargo from treating a project scaffolded
+# inside another Rust repository as part of the parent workspace.
+[workspace]
+
 [lib]
 name = "{{ crate_name }}"
 crate-type = ["cdylib", "lib"]

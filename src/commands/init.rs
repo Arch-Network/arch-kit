@@ -355,6 +355,7 @@ mod tests {
         let readme = fs::read_to_string(project_path.join("README.md")).unwrap();
 
         assert!(manifest.contains("name = \"hello-world\""));
+        assert!(manifest.contains("[workspace]"));
         assert!(manifest.contains("arch-satellite-lang = \"=0.31.5\""));
         assert!(manifest.contains("unicode-segmentation = \"=1.12.0\""));
         assert!(source.contains(
