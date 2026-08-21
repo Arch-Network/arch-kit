@@ -1,7 +1,9 @@
 use clap::{Parser, Subcommand};
 
 use crate::{
-    commands::{deploy, init, keygen, pubkey},
+    commands::{
+        ata, deploy, init, keygen, mint_info, pubkey, token_account, token_accounts, token_balance,
+    },
     network::{BitcoinNetwork, DEFAULT_RPC_URL},
 };
 
@@ -46,6 +48,21 @@ pub(crate) enum Command {
 
     /// Derive an Arch public key from a secret key file.
     Pubkey(pubkey::Args),
+
+    /// Derive an associated token account address for an owner and mint.
+    Ata(ata::Args),
+
+    /// Get an owner's associated token account balance for a mint.
+    TokenBalance(token_balance::Args),
+
+    /// Inspect an APL token account.
+    TokenAccount(token_account::Args),
+
+    /// List every APL token account owned by an address.
+    TokenAccounts(token_accounts::Args),
+
+    /// Inspect an APL token mint.
+    MintInfo(mint_info::Args),
 
     /// Check whether the configured Arch node is ready and its chain is progressing.
     Health,

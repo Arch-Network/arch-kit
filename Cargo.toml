@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+apl-associated-token-account = { version = "=0.8.2", features = ["no-entrypoint"] }
+apl-token = { version = "=0.8.2", features = ["no-entrypoint"] }
 arch_sdk = "=0.8.2"
 bitcoin = "=0.32.7"
 bs58 = "0.5"

@@ -1,7 +1,7 @@
 # arch-kit
 
-`arch-kit` is a CLI for generating Arch keys, deploying programs, and
-publishing canonical on-chain IDLs.
+`arch-kit` is a CLI for generating Arch keys, deploying programs, publishing
+canonical on-chain IDLs, and inspecting APL tokens.
 
 ## Install
 
@@ -39,6 +39,11 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | [`pubkey`](#derive-a-public-key) | `arch-kit pubkey <PATH>` | Derive a Base58 Arch public key from a secret key file. |
 | [`deploy`](#deploy-a-program) | `arch-kit deploy [OPTIONS]` | Deploy or update a program and its IDL. |
 | [`health`](#check-node-health) | `arch-kit health` | Check validator readiness and block progression. |
+| [`ata`](#inspect-tokens) | `arch-kit ata <OWNER> <MINT>` | Derive an associated token account address. |
+| [`token-balance`](#inspect-tokens) | `arch-kit token-balance <OWNER> <MINT>` | Read an owner's ATA balance for a mint. |
+| [`token-account`](#inspect-tokens) | `arch-kit token-account <ADDRESS>` | Inspect one APL token account. |
+| [`token-accounts`](#inspect-tokens) | `arch-kit token-accounts <OWNER>` | List every APL token account owned by an address. |
+| [`mint-info`](#inspect-tokens) | `arch-kit mint-info <MINT>` | Inspect an APL token mint. |
 
 Run `arch-kit <COMMAND> --help` for the complete option list.
 
@@ -116,6 +121,29 @@ arch-kit pubkey ./keys/authority.key
 
 The command reads either supported secret-key file format and writes only the
 derived Base58 Arch public key to standard output.
+
+## Inspect tokens
+
+Derive an ATA locally without contacting an RPC node:
+
+```bash
+arch-kit ata <OWNER> <MINT>
+```
+
+Read its balance or inspect token state:
+
+```bash
+arch-kit token-balance <OWNER> <MINT>
+arch-kit token-account <TOKEN_ACCOUNT>
+arch-kit token-accounts <OWNER>
+arch-kit mint-info <MINT>
+```
+
+Public keys may be Base58 or 64-character hex. Amounts include both raw and
+decimal-formatted values. RPC-backed token commands accept `--json`; raw token
+amounts are encoded as strings in JSON to preserve full `u64` precision. A
+missing ATA has a zero balance and `exists: false`, while malformed or
+incorrectly owned accounts are errors.
 
 ## Deploy a program
 

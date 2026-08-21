@@ -59,6 +59,30 @@ pub(crate) enum CliError {
     #[error("vanity key search failed: {0}")]
     VanitySearch(String),
 
+    #[error("account {address} is owned by {actual}, expected APL token program {expected}")]
+    TokenProgramOwnerMismatch {
+        address: String,
+        expected: String,
+        actual: String,
+    },
+
+    #[error("failed to decode token account {address}: {detail}")]
+    InvalidTokenAccount { address: String, detail: String },
+
+    #[error("failed to decode token mint {address}: {detail}")]
+    InvalidTokenMint { address: String, detail: String },
+
+    #[error(
+        "token account {address} has mint {actual_mint} and owner {actual_owner}, expected mint {expected_mint} and owner {expected_owner}"
+    )]
+    TokenAccountIdentityMismatch {
+        address: String,
+        expected_mint: String,
+        actual_mint: String,
+        expected_owner: String,
+        actual_owner: String,
+    },
+
     #[error("Arch node is not ready: {rpc_url}")]
     NodeNotReady { rpc_url: String },
 

@@ -68,9 +68,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "apl-associated-token-account"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02ef59b69b443b593edc556030df0f73c02584638710b150ea7f0463e75fc547"
+dependencies = [
+ "apl-token",
+ "arch_program",
+ "arrayref",
+ "bitcoin",
+ "bitcoin-io",
+ "borsh",
+ "bytemuck",
+ "num-derive",
+ "num-traits",
+ "num_enum",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "apl-token"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a89f87a23d789fdda592943cfab7ccfa0fa4c7841ee355db662f05b78ad2b2f"
+dependencies = [
+ "arch_program",
+ "arrayref",
+ "bitcoin",
+ "bitcoin-io",
+ "borsh",
+ "bytemuck",
+ "num-derive",
+ "num-traits",
+ "num_enum",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "arch-kit"
 version = "0.1.0"
 dependencies = [
+ "apl-associated-token-account",
+ "apl-token",
  "arch_sdk",
  "bitcoin",
  "bs58",
@@ -197,6 +236,12 @@ dependencies = [
  "tracing",
  "uuid",
 ]
+
+[[package]]
+name = "arrayref"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76a2e8124351fda1ef8aaaa3bbd7ebbcb486bbcd4225aca0aa0d84bb2db8fecb"
 
 [[package]]
 name = "arrayvec"
@@ -1448,6 +1493,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "num_enum"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d0bca838442ec211fa11de3a8b0e0e8f3a4522575b5c4c06ed722e005036f26"
+dependencies = [
+ "num_enum_derive",
+ "rustversion",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "680998035259dcfcafe653688bf2aa6d3e2dc05e98be6ab46afb089dc84f1df8"
+dependencies = [
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
