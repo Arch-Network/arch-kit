@@ -58,14 +58,21 @@ pub(crate) fn read_token_account(
     client: &ArchRpcClient,
     address: Pubkey,
 ) -> Result<TokenAccountView> {
-    let info = client.read_account_info(address)?;
-    let state = decode_token_account(address, &info)?;
+    let state = read_token_account_state(client, address)?;
     let mint = read_mint(client, state.mint)?;
     Ok(TokenAccountView {
         address,
         state,
         mint,
     })
+}
+
+pub(crate) fn read_token_account_state(
+    client: &ArchRpcClient,
+    address: Pubkey,
+) -> Result<TokenAccount> {
+    let info = client.read_account_info(address)?;
+    decode_token_account(address, &info)
 }
 
 pub(crate) fn read_associated_balance(
@@ -199,28 +206,6 @@ fn require_token_program_owner(address: Pubkey, owner: Pubkey) -> Result<()> {
     })
 }
 
-pub(crate) fn format_amount(amount: u64, decimals: u8) -> String {
-    if amount == 0 || decimals == 0 {
-        return amount.to_string();
-    }
-
-    let digits = amount.to_string();
-    let decimals = usize::from(decimals);
-    let mut formatted = if digits.len() <= decimals {
-        format!("0.{}{}", "0".repeat(decimals - digits.len()), digits)
-    } else {
-        let split = digits.len() - decimals;
-        format!("{}.{}", &digits[..split], &digits[split..])
-    };
-    while formatted.ends_with('0') {
-        formatted.pop();
-    }
-    if formatted.ends_with('.') {
-        formatted.pop();
-    }
-    formatted
-}
-
 pub(crate) fn account_state_name(state: AccountState) -> &'static str {
     match state {
         AccountState::Uninitialized => "uninitialized",
@@ -266,15 +251,6 @@ mod tests {
             key
         );
         assert!(parse_pubkey("not-a-key", "key").is_err());
-    }
-
-    #[test]
-    fn formats_token_amounts_without_floating_point() {
-        assert_eq!(format_amount(0, 9), "0");
-        assert_eq!(format_amount(42, 0), "42");
-        assert_eq!(format_amount(42, 4), "0.0042");
-        assert_eq!(format_amount(1_230_000, 6), "1.23");
-        assert_eq!(format_amount(u64::MAX, 9), "18446744073.709551615");
     }
 
     #[test]

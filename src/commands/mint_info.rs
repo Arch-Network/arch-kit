@@ -3,7 +3,8 @@ use serde_json::json;
 
 use crate::{
     error::Result,
-    token::{format_amount, optional_pubkey, parse_pubkey, read_mint},
+    token::{optional_pubkey, parse_pubkey, read_mint},
+    utils::format_amount,
 };
 
 #[derive(Debug, clap::Args)]

@@ -5,6 +5,7 @@ mod idl;
 mod keys;
 mod network;
 mod token;
+mod utils;
 mod vanity;
 
 use clap::Parser;
@@ -45,6 +46,13 @@ fn run() -> Result<()> {
         Command::MintInfo(args) => {
             commands::mint_info::run(&network::config(rpc_url, bitcoin_network)?, args)
         }
+        Command::TokenTransfer(args) => {
+            commands::token_transfer::run_to_user(&network::config(rpc_url, bitcoin_network)?, args)
+        }
+        Command::TokenTransferToAccount(args) => commands::token_transfer::run_to_account(
+            &network::config(rpc_url, bitcoin_network)?,
+            args,
+        ),
         Command::Health => commands::health::run(&network::config(rpc_url, bitcoin_network)?),
         Command::Deploy(args) => {
             commands::deploy::run(&network::config(rpc_url, bitcoin_network)?, args)

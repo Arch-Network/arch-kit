@@ -44,6 +44,8 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | [`token-account`](#inspect-tokens) | `arch-kit token-account <ADDRESS>` | Inspect one APL token account. |
 | [`token-accounts`](#inspect-tokens) | `arch-kit token-accounts <OWNER>` | List every APL token account owned by an address. |
 | [`mint-info`](#inspect-tokens) | `arch-kit mint-info <MINT>` | Inspect an APL token mint. |
+| [`token-transfer`](#transfer-tokens) | `arch-kit token-transfer <RECIPIENT> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens to a user's ATA, creating it idempotently. |
+| [`token-transfer-to-account`](#transfer-tokens) | `arch-kit token-transfer-to-account <DESTINATION> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens directly to an APL token account. |
 
 Run `arch-kit <COMMAND> --help` for the complete option list.
 
@@ -144,6 +146,27 @@ decimal-formatted values. RPC-backed token commands accept `--json`; raw token
 amounts are encoded as strings in JSON to preserve full `u64` precision. A
 missing ATA has a zero balance and `exists: false`, while malformed or
 incorrectly owned accounts are errors.
+
+## Transfer tokens
+
+Transfer tokens from the signing key's ATA to another user's ATA. The recipient
+ATA is derived and idempotently created in the same transaction:
+
+```bash
+arch-kit token-transfer <RECIPIENT> <MINT> 1.25 --key ./keys/owner.key
+```
+
+Transfer directly to an existing token account, including a non-ATA account:
+
+```bash
+arch-kit token-transfer-to-account <TOKEN_ACCOUNT> <MINT> 1.25 \
+  --key ./keys/owner.key
+```
+
+Amounts are human-readable decimals interpreted using the mint's configured
+decimals. Both commands derive the source ATA from the signing key by default;
+pass `--source <TOKEN_ACCOUNT>` to use another token account owned by the same
+signer.
 
 ## Deploy a program
 

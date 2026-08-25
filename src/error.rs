@@ -72,6 +72,9 @@ pub(crate) enum CliError {
     #[error("failed to decode token mint {address}: {detail}")]
     InvalidTokenMint { address: String, detail: String },
 
+    #[error("token transfer failed: {0}")]
+    TokenTransfer(String),
+
     #[error(
         "token account {address} has mint {actual_mint} and owner {actual_owner}, expected mint {expected_mint} and owner {expected_owner}"
     )]
