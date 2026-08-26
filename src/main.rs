@@ -53,6 +53,9 @@ fn run() -> Result<()> {
             &network::config(rpc_url, bitcoin_network)?,
             args,
         ),
+        Command::TransferArch(args) => {
+            commands::transfer_arch::run(&network::config(rpc_url, bitcoin_network)?, args)
+        }
         Command::Health => commands::health::run(&network::config(rpc_url, bitcoin_network)?),
         Command::Deploy(args) => {
             commands::deploy::run(&network::config(rpc_url, bitcoin_network)?, args)

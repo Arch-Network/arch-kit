@@ -46,6 +46,7 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | [`mint-info`](#inspect-tokens) | `arch-kit mint-info <MINT>` | Inspect an APL token mint. |
 | [`token-transfer`](#transfer-tokens) | `arch-kit token-transfer <RECIPIENT> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens to a user's ATA, creating it idempotently. |
 | [`token-transfer-to-account`](#transfer-tokens) | `arch-kit token-transfer-to-account <DESTINATION> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens directly to an APL token account. |
+| [`transfer-arch`](#transfer-native-arch) | `arch-kit transfer-arch <DESTINATION> <AMOUNT> --key <PATH>` | Transfer native ARCH to an account. |
 
 Run `arch-kit <COMMAND> --help` for the complete option list.
 
@@ -167,6 +168,25 @@ Amounts are human-readable decimals interpreted using the mint's configured
 decimals. Both commands derive the source ATA from the signing key by default;
 pass `--source <TOKEN_ACCOUNT>` to use another token account owned by the same
 signer.
+
+## Transfer native ARCH
+
+Transfer native ARCH using a local secret key file:
+
+```bash
+arch-kit transfer-arch <DESTINATION> 0.1 --key ./keys/owner.key
+```
+
+ARCH uses nine decimal places. The command validates the sender's system
+account and requires enough balance for both the amount and the network's
+5,000-lamport base fee before submitting a native system transfer. For mainnet,
+place the shared network arguments before the command:
+
+```bash
+arch-kit --rpc-url https://rpc.mainnet.arch.network \
+  --bitcoin-network mainnet \
+  transfer-arch <DESTINATION> 0.1 --key ./keys/owner.key
+```
 
 ## Deploy a program
 

@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use crate::{
     commands::{
         ata, deploy, init, keygen, mint_info, pubkey, token_account, token_accounts, token_balance,
-        token_transfer,
+        token_transfer, transfer_arch,
     },
     network::{BitcoinNetwork, DEFAULT_RPC_URL},
 };
@@ -70,6 +70,9 @@ pub(crate) enum Command {
 
     /// Transfer tokens directly to an APL token account.
     TokenTransferToAccount(token_transfer::AccountArgs),
+
+    /// Transfer native ARCH to an account.
+    TransferArch(transfer_arch::Args),
 
     /// Check whether the configured Arch node is ready and its chain is progressing.
     Health,

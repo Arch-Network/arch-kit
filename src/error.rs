@@ -75,6 +75,9 @@ pub(crate) enum CliError {
     #[error("token transfer failed: {0}")]
     TokenTransfer(String),
 
+    #[error("native ARCH transfer failed: {0}")]
+    NativeTransfer(String),
+
     #[error(
         "token account {address} has mint {actual_mint} and owner {actual_owner}, expected mint {expected_mint} and owner {expected_owner}"
     )]

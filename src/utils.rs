@@ -71,7 +71,7 @@ pub(crate) fn parse_amount(value: &str, decimals: u8) -> Result<u64> {
 }
 
 fn invalid_amount(value: &str, detail: &str) -> CliError {
-    CliError::InvalidArgument(format!("token amount '{value}' {detail}"))
+    CliError::InvalidArgument(format!("amount '{value}' {detail}"))
 }
 
 #[cfg(test)]
