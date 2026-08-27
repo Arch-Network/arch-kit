@@ -44,7 +44,8 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | [`token-account`](#inspect-tokens) | `arch-kit token-account <ADDRESS>` | Inspect one APL token account. |
 | [`token-accounts`](#inspect-tokens) | `arch-kit token-accounts <OWNER>` | List every APL token account owned by an address. |
 | [`mint-info`](#inspect-tokens) | `arch-kit mint-info <MINT>` | Inspect an APL token mint. |
-| [`create-mint`](#create-a-mint) | `arch-kit create-mint --mint-key <PATH> --key <PATH>` | Create a zero-supply APL token mint. |
+| [`create-mint`](#create-a-mint) | `arch-kit create-mint --mint-key <PATH> --key <PATH>` | Create an APL token mint with optional initial supply. |
+| [`mint-tokens`](#mint-tokens) | `arch-kit mint-tokens <RECIPIENT> <MINT> <AMOUNT> --key <PATH>` | Mint tokens to a user's ATA. |
 | [`token-transfer`](#transfer-tokens) | `arch-kit token-transfer <RECIPIENT> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens to a user's ATA, creating it idempotently. |
 | [`token-transfer-to-account`](#transfer-tokens) | `arch-kit token-transfer-to-account <DESTINATION> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens directly to an APL token account. |
 | [`faucet`](#fund-an-account) | `arch-kit faucet --key <PATH>` | Create or fund an account using a non-mainnet faucet. |
@@ -152,17 +153,31 @@ incorrectly owned accounts are errors.
 
 ## Create a mint
 
-Create a zero-supply mint using existing mint and authority key files:
+Create a mint using existing mint and authority key files:
 
 ```bash
 arch-kit create-mint \
   --mint-key ./keys/mint.key \
   --key ./keys/authority.key \
-  --decimals 6
+  --decimals 6 \
+  --initial-supply 1000000
 ```
 
 Decimals default to `9`. The payer also becomes the mint authority. Mints are
-non-freezable by default; pass `--freeze-authority <PUBKEY>` to set one.
+non-freezable by default; pass `--freeze-authority <PUBKEY>` to set one. Initial
+supply is minted to the authority's ATA in the same transaction. Add
+`--fixed-supply` to permanently revoke mint authority after the initial mint.
+
+## Mint tokens
+
+Mint additional tokens to a user's ATA, creating it idempotently when needed:
+
+```bash
+arch-kit mint-tokens <RECIPIENT> <MINT> 100 --key ./keys/authority.key
+```
+
+Amounts are interpreted using the mint's decimals. Fixed-supply mints reject
+this operation because they no longer have a mint authority.
 
 ## Transfer tokens
 

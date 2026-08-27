@@ -6,6 +6,7 @@ pub(crate) mod health;
 pub(crate) mod init;
 pub(crate) mod keygen;
 pub(crate) mod mint_info;
+pub(crate) mod mint_tokens;
 pub(crate) mod pubkey;
 pub(crate) mod token_account;
 pub(crate) mod token_accounts;

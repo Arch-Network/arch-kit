@@ -1,10 +1,18 @@
 use std::collections::{BTreeSet, HashMap};
 
-use apl_associated_token_account::get_associated_token_address_and_bump_seed;
-use apl_token::state::{Account as TokenAccount, AccountState, Mint};
+use apl_associated_token_account::{
+    create_associated_token_account_idempotent, get_associated_token_address_and_bump_seed,
+};
+use apl_token::{
+    instruction::mint_to_checked,
+    state::{Account as TokenAccount, AccountState, Mint},
+};
 use arch_sdk::{
     AccountFilter, AccountInfo, ArchError, Config,
-    arch_program::{program_option::COption, program_pack::Pack, pubkey::Pubkey},
+    arch_program::{
+        instruction::Instruction, program_option::COption, program_pack::Pack, pubkey::Pubkey,
+        system_program,
+    },
     blocking::ArchRpcClient,
 };
 
@@ -47,6 +55,36 @@ pub(crate) fn parse_pubkey(value: &str, label: &str) -> Result<Pubkey> {
 
 pub(crate) fn associated_token_address(owner: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
     get_associated_token_address_and_bump_seed(owner, mint, &apl_associated_token_account::id())
+}
+
+pub(crate) fn mint_to_user_instructions(
+    payer: Pubkey,
+    recipient: Pubkey,
+    mint: Pubkey,
+    authority: Pubkey,
+    amount: u64,
+    decimals: u8,
+) -> Result<(Pubkey, Vec<Instruction>)> {
+    let destination = associated_token_address(&recipient, &mint).0;
+    let create_destination = create_associated_token_account_idempotent(
+        &payer,
+        &destination,
+        &recipient,
+        &mint,
+        &apl_token::id(),
+        &system_program::SYSTEM_PROGRAM_ID,
+    );
+    let mint_to = mint_to_checked(
+        &apl_token::id(),
+        &mint,
+        &destination,
+        &authority,
+        &[],
+        amount,
+        decimals,
+    )
+    .map_err(|error| CliError::MintTokens(format!("could not build mint instruction: {error}")))?;
+    Ok((destination, vec![create_destination, mint_to]))
 }
 
 pub(crate) fn read_mint(client: &ArchRpcClient, address: Pubkey) -> Result<MintView> {

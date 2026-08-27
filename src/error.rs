@@ -78,6 +78,9 @@ pub(crate) enum CliError {
     #[error("mint creation failed: {0}")]
     MintCreation(String),
 
+    #[error("token minting failed: {0}")]
+    MintTokens(String),
+
     #[error("native ARCH transfer failed: {0}")]
     NativeTransfer(String),
 

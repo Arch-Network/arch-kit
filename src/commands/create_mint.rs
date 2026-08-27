@@ -1,6 +1,9 @@
 use std::path::PathBuf;
 
-use apl_token::{instruction::initialize_mint, state::Mint};
+use apl_token::{
+    instruction::{AuthorityType, initialize_mint, set_authority},
+    state::Mint,
+};
 use arch_sdk::{
     Config,
     arch_program::{
@@ -13,8 +16,9 @@ use arch_sdk::{
 use crate::{
     error::{CliError, Result},
     keys::load_existing_key,
-    token::parse_pubkey,
+    token::{mint_to_user_instructions, parse_pubkey},
     transaction::send_and_confirm,
+    utils::{format_amount, parse_amount},
 };
 
 #[derive(Debug, clap::Args)]
@@ -34,6 +38,14 @@ pub(crate) struct Args {
     /// Optional freeze authority as a Base58 or hexadecimal Arch public key.
     #[arg(long, value_name = "PUBKEY")]
     pub(crate) freeze_authority: Option<String>,
+
+    /// Human-readable amount to mint into the authority's ATA during creation.
+    #[arg(long, value_name = "AMOUNT")]
+    pub(crate) initial_supply: Option<String>,
+
+    /// Permanently revoke mint authority after issuing the initial supply.
+    #[arg(long, requires = "initial_supply")]
+    pub(crate) fixed_supply: bool,
 }
 
 pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
@@ -46,7 +58,19 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
         .as_deref()
         .map(|value| parse_pubkey(value, "freeze authority"))
         .transpose()?;
-    let instructions = create_mint_instructions(mint, authority, freeze_authority, args.decimals)?;
+    let initial_supply = args
+        .initial_supply
+        .as_deref()
+        .map(|amount| parse_amount(amount, args.decimals))
+        .transpose()?;
+    let instructions = create_mint_instructions(
+        mint,
+        authority,
+        freeze_authority,
+        args.decimals,
+        initial_supply,
+        args.fixed_supply,
+    )?;
     let transaction_id = send_and_confirm(
         &ArchRpcClient::new(config),
         "mint creation",
@@ -59,8 +83,19 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
     println!("  Transaction: {transaction_id}");
     println!("  Mint: {mint}");
     println!("  Decimals: {}", args.decimals);
-    println!("  Supply: 0");
-    println!("  Mint authority: {authority}");
+    let supply = initial_supply.unwrap_or(0);
+    println!(
+        "  Supply: {} ({supply} raw)",
+        format_amount(supply, args.decimals)
+    );
+    println!(
+        "  Mint authority: {}",
+        if args.fixed_supply {
+            "none".to_string()
+        } else {
+            authority.to_string()
+        }
+    );
     println!(
         "  Freeze authority: {}",
         freeze_authority
@@ -85,6 +120,8 @@ fn create_mint_instructions(
     authority: Pubkey,
     freeze_authority: Option<Pubkey>,
     decimals: u8,
+    initial_supply: Option<u64>,
+    fixed_supply: bool,
 ) -> Result<Vec<Instruction>> {
     let create_account = system_instruction::create_account(
         &authority,
@@ -103,7 +140,28 @@ fn create_mint_instructions(
     .map_err(|error| {
         CliError::MintCreation(format!("could not build initialize instruction: {error}"))
     })?;
-    Ok(vec![create_account, initialize])
+    let mut instructions = vec![create_account, initialize];
+    if let Some(amount) = initial_supply {
+        let (_, mint_instructions) =
+            mint_to_user_instructions(authority, authority, mint, authority, amount, decimals)?;
+        instructions.extend(mint_instructions);
+    }
+    if fixed_supply {
+        instructions.push(
+            set_authority(
+                &apl_token::id(),
+                &mint,
+                None,
+                AuthorityType::MintTokens,
+                &authority,
+                &[],
+            )
+            .map_err(|error| {
+                CliError::MintCreation(format!("could not build fixed-supply instruction: {error}"))
+            })?,
+        );
+    }
+    Ok(instructions)
 }
 
 #[cfg(test)]
@@ -112,6 +170,7 @@ mod tests {
 
     use super::*;
     use crate::cli::{Cli, Command};
+    use crate::token::associated_token_address;
 
     #[test]
     fn parses_keys_and_defaults_to_nine_decimals() {
@@ -131,6 +190,8 @@ mod tests {
         assert_eq!(args.key, PathBuf::from("authority.key"));
         assert_eq!(args.decimals, 9);
         assert!(args.freeze_authority.is_none());
+        assert!(args.initial_supply.is_none());
+        assert!(!args.fixed_supply);
     }
 
     #[test]
@@ -146,6 +207,9 @@ mod tests {
             "6",
             "--freeze-authority",
             "freeze",
+            "--initial-supply",
+            "1000.5",
+            "--fixed-supply",
         ])
         .unwrap();
         let Command::CreateMint(args) = cli.command else {
@@ -153,6 +217,8 @@ mod tests {
         };
         assert_eq!(args.decimals, 6);
         assert_eq!(args.freeze_authority.as_deref(), Some("freeze"));
+        assert_eq!(args.initial_supply.as_deref(), Some("1000.5"));
+        assert!(args.fixed_supply);
     }
 
     #[test]
@@ -163,6 +229,18 @@ mod tests {
         assert!(
             Cli::try_parse_from(["arch-kit", "create-mint", "--key", "authority.key"]).is_err()
         );
+        assert!(
+            Cli::try_parse_from([
+                "arch-kit",
+                "create-mint",
+                "--mint-key",
+                "mint.key",
+                "--key",
+                "authority.key",
+                "--fixed-supply",
+            ])
+            .is_err()
+        );
     }
 
     #[test]
@@ -172,7 +250,8 @@ mod tests {
         let freeze_authority = Pubkey::from([3; 32]);
 
         let instructions =
-            create_mint_instructions(mint, authority, Some(freeze_authority), 6).unwrap();
+            create_mint_instructions(mint, authority, Some(freeze_authority), 6, None, false)
+                .unwrap();
 
         assert_eq!(
             instructions,
@@ -196,5 +275,46 @@ mod tests {
         );
         assert!(require_distinct_accounts(authority, authority).is_err());
         assert!(require_distinct_accounts(authority, mint).is_ok());
+    }
+
+    #[test]
+    fn appends_initial_supply_and_revokes_mint_authority() {
+        let mint = Pubkey::from([1; 32]);
+        let authority = Pubkey::from([2; 32]);
+        let instructions =
+            create_mint_instructions(mint, authority, None, 6, Some(1_500_000), true).unwrap();
+        let destination = associated_token_address(&authority, &mint).0;
+
+        assert_eq!(instructions.len(), 5);
+        assert_eq!(
+            instructions[2].program_id,
+            apl_associated_token_account::id()
+        );
+        assert_eq!(instructions[2].accounts[1].pubkey, destination);
+        assert_eq!(
+            instructions[3],
+            apl_token::instruction::mint_to_checked(
+                &apl_token::id(),
+                &mint,
+                &destination,
+                &authority,
+                &[],
+                1_500_000,
+                6,
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            instructions[4],
+            set_authority(
+                &apl_token::id(),
+                &mint,
+                None,
+                AuthorityType::MintTokens,
+                &authority,
+                &[],
+            )
+            .unwrap()
+        );
     }
 }

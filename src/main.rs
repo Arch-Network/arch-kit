@@ -50,6 +50,9 @@ fn run() -> Result<()> {
         Command::CreateMint(args) => {
             commands::create_mint::run(&network::config(rpc_url, bitcoin_network)?, args)
         }
+        Command::MintTokens(args) => {
+            commands::mint_tokens::run(&network::config(rpc_url, bitcoin_network)?, args)
+        }
         Command::TokenTransfer(args) => {
             commands::token_transfer::run_to_user(&network::config(rpc_url, bitcoin_network)?, args)
         }
