@@ -63,6 +63,9 @@ fn run() -> Result<()> {
         Command::TransferArch(args) => {
             commands::transfer_arch::run(&network::config(rpc_url, bitcoin_network)?, args)
         }
+        Command::ArchBalance(args) => {
+            commands::arch_balance::run(&network::config(rpc_url, bitcoin_network)?, args)
+        }
         Command::Faucet(args) => {
             commands::faucet::run(&network::config(rpc_url, bitcoin_network)?, args)
         }

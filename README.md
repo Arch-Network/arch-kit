@@ -50,6 +50,7 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | [`token-transfer-to-account`](#transfer-tokens) | `arch-kit token-transfer-to-account <DESTINATION> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens directly to an APL token account. |
 | [`faucet`](#fund-an-account) | `arch-kit faucet --key <PATH>` | Create or fund an account using a non-mainnet faucet. |
 | [`transfer-arch`](#transfer-native-arch) | `arch-kit transfer-arch <DESTINATION> <AMOUNT> --key <PATH>` | Transfer native ARCH to an account. |
+| [`arch-balance`](#inspect-native-arch) | `arch-kit arch-balance <ACCOUNT>` | Read an account's native ARCH balance. |
 
 Run `arch-kit <COMMAND> --help` for the complete option list.
 
@@ -229,6 +230,18 @@ arch-kit --rpc-url https://rpc.mainnet.arch.network \
   --bitcoin-network mainnet \
   transfer-arch <DESTINATION> 0.1 --key ./keys/owner.key
 ```
+
+## Inspect native ARCH
+
+Read an account's native balance:
+
+```bash
+arch-kit arch-balance <ACCOUNT>
+arch-kit arch-balance <ACCOUNT> --json
+```
+
+ARCH uses nine decimal places. JSON output represents lamports as a string to
+preserve full `u64` precision.
 
 ## Deploy a program
 

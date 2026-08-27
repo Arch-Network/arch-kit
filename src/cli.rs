@@ -2,8 +2,8 @@ use clap::{Parser, Subcommand};
 
 use crate::{
     commands::{
-        ata, create_mint, deploy, faucet, init, keygen, mint_info, mint_tokens, pubkey,
-        token_account, token_accounts, token_balance, token_transfer, transfer_arch,
+        arch_balance, ata, create_mint, deploy, faucet, init, keygen, mint_info, mint_tokens,
+        pubkey, token_account, token_accounts, token_balance, token_transfer, transfer_arch,
     },
     network::{BitcoinNetwork, DEFAULT_RPC_URL},
 };
@@ -79,6 +79,9 @@ pub(crate) enum Command {
 
     /// Transfer native ARCH to an account.
     TransferArch(transfer_arch::Args),
+
+    /// Read an account's native ARCH balance.
+    ArchBalance(arch_balance::Args),
 
     /// Create or fund an account through the configured network's faucet.
     Faucet(faucet::Args),

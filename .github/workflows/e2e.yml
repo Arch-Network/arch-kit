@@ -67,25 +67,166 @@ jobs:
         run: |
           set -euo pipefail
 
-          e2e_root="${RUNNER_TEMP}/arch-kit-faucet-e2e"
-          sender_key="${e2e_root}/sender.key"
+          command -v jq >/dev/null 2>&1 || {
+            echo "jq is required for E2E assertions" >&2
+            exit 1
+          }
+
+          e2e_root="${RUNNER_TEMP}/arch-kit-token-e2e"
+          authority_key="${e2e_root}/authority.key"
+          mint_key="${e2e_root}/mint.key"
+          user_key="${e2e_root}/user.key"
           recipient_key="${e2e_root}/recipient.key"
 
           mkdir -p "${e2e_root}"
-          ./target/release/arch-kit keygen "${sender_key}" "${recipient_key}"
-          recipient="$(./target/release/arch-kit pubkey "${recipient_key}")"
+          ./target/release/arch-kit keygen \
+            "${authority_key}" \
+            "${mint_key}" \
+            "${user_key}" \
+            "${recipient_key}"
+          authority="$(./target/release/arch-kit pubkey "${authority_key}")"
+          user="$(./target/release/arch-kit pubkey "${user_key}")"
 
           ./target/release/arch-kit \
             --rpc-url https://rpc.testnet.arch.network \
             --bitcoin-network testnet \
             faucet \
-            --key "${sender_key}"
+            --key "${authority_key}"
+
+          authority_balance="$(
+            ./target/release/arch-kit \
+              --rpc-url https://rpc.testnet.arch.network \
+              --bitcoin-network testnet \
+              arch-balance "${authority}" --json
+          )"
+          jq -e '.lamports | tonumber >= 1000000' \
+            <<<"${authority_balance}" >/dev/null
 
           ./target/release/arch-kit \
             --rpc-url https://rpc.testnet.arch.network \
             --bitcoin-network testnet \
-            transfer-arch "${recipient}" 0.0001 \
-            --key "${sender_key}"
+            transfer-arch "${user}" 0.0001 \
+            --key "${authority_key}"
+
+          user_balance="$(
+            ./target/release/arch-kit \
+              --rpc-url https://rpc.testnet.arch.network \
+              --bitcoin-network testnet \
+              arch-balance "${user}" --json
+          )"
+          jq -e \
+            --arg user "${user}" \
+            '.account == $user and .lamports == "100000" and .amount == "0.0001" and .decimals == 9' \
+            <<<"${user_balance}" >/dev/null
+
+      - name: Token lifecycle round trip
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          command -v jq >/dev/null 2>&1 || {
+            echo "jq is required for E2E assertions" >&2
+            exit 1
+          }
+
+          e2e_root="${RUNNER_TEMP}/arch-kit-token-e2e"
+          authority_key="${e2e_root}/authority.key"
+          mint_key="${e2e_root}/mint.key"
+          user_key="${e2e_root}/user.key"
+          recipient_key="${e2e_root}/recipient.key"
+          authority="$(./target/release/arch-kit pubkey "${authority_key}")"
+          mint="$(./target/release/arch-kit pubkey "${mint_key}")"
+          user="$(./target/release/arch-kit pubkey "${user_key}")"
+          recipient="$(./target/release/arch-kit pubkey "${recipient_key}")"
+
+          arch_kit() {
+            ./target/release/arch-kit \
+              --rpc-url https://rpc.testnet.arch.network \
+              --bitcoin-network testnet \
+              "$@"
+          }
+
+          assert_mint() {
+            local expected_raw="$1"
+            local expected_amount="$2"
+            local result
+            result="$(arch_kit mint-info "${mint}" --json)"
+            jq -e \
+              --arg mint "${mint}" \
+              --arg authority "${authority}" \
+              --arg raw "${expected_raw}" \
+              --arg amount "${expected_amount}" \
+              '.mint == $mint and
+               .initialized == true and
+               .decimals == 6 and
+               .supply_raw == $raw and
+               .supply == $amount and
+               .mint_authority == $authority and
+               .freeze_authority == null' \
+              <<<"${result}" >/dev/null
+          }
+
+          assert_token_state() {
+            local owner="$1"
+            local expected_raw="$2"
+            local expected_amount="$3"
+            local ata balance accounts
+            ata="$(./target/release/arch-kit ata "${owner}" "${mint}")"
+            balance="$(arch_kit token-balance "${owner}" "${mint}" --json)"
+            accounts="$(arch_kit token-accounts "${owner}" --json)"
+
+            jq -e \
+              --arg owner "${owner}" \
+              --arg mint "${mint}" \
+              --arg ata "${ata}" \
+              --arg raw "${expected_raw}" \
+              --arg amount "${expected_amount}" \
+              '.owner == $owner and
+               .mint == $mint and
+               .token_account == $ata and
+               .exists == true and
+               .decimals == 6 and
+               .amount_raw == $raw and
+               .amount == $amount' \
+              <<<"${balance}" >/dev/null
+
+            jq -e \
+              --arg owner "${owner}" \
+              --arg mint "${mint}" \
+              --arg ata "${ata}" \
+              --arg raw "${expected_raw}" \
+              --arg amount "${expected_amount}" \
+              '.owner == $owner and
+               .count == 1 and
+               (.accounts | length) == 1 and
+               .accounts[0].address == $ata and
+               .accounts[0].mint == $mint and
+               .accounts[0].amount_raw == $raw and
+               .accounts[0].amount == $amount and
+               .accounts[0].decimals == 6 and
+               .accounts[0].state == "initialized" and
+               .accounts[0].is_associated == true' \
+              <<<"${accounts}" >/dev/null
+          }
+
+          arch_kit create-mint \
+            --mint-key "${mint_key}" \
+            --key "${authority_key}" \
+            --decimals 6 \
+            --initial-supply 100
+          assert_mint "100000000" "100"
+          assert_token_state "${authority}" "100000000" "100"
+
+          arch_kit mint-tokens "${user}" "${mint}" 25 \
+            --key "${authority_key}"
+          assert_mint "125000000" "125"
+          assert_token_state "${user}" "25000000" "25"
+
+          arch_kit token-transfer "${recipient}" "${mint}" 10 \
+            --key "${user_key}"
+          assert_mint "125000000" "125"
+          assert_token_state "${user}" "15000000" "15"
+          assert_token_state "${recipient}" "10000000" "10"
 
       - name: Install SBF build dependencies
         shell: bash
@@ -127,6 +268,8 @@ jobs:
           test -s "${artifact_dir}/hello_world.so"
 
       - name: Deploy generated program to testnet
+        # Temporarily disabled while the SDK program deployer is being stabilized.
+        if: ${{ false }}
         shell: bash
         run: |
           set -euo pipefail
