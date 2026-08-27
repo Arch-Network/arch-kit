@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use apl_token::{
     instruction::{AuthorityType, initialize_mint, set_authority},
     state::Mint,
@@ -14,8 +12,8 @@ use arch_sdk::{
 };
 
 use crate::{
+    arch_signer::SignerSource,
     error::{CliError, Result},
-    keys::load_existing_key,
     token::{mint_to_user_instructions, parse_pubkey},
     transaction::send_and_confirm,
     utils::{format_amount, parse_amount},
@@ -23,13 +21,13 @@ use crate::{
 
 #[derive(Debug, clap::Args)]
 pub(crate) struct Args {
-    /// Existing secret key file for the new mint account.
-    #[arg(long, value_name = "PATH")]
-    pub(crate) mint_key: PathBuf,
+    /// Mint signer source: a path, file:<PATH>, or cosigner:<ENV_PREFIX>.
+    #[arg(long, visible_alias = "mint-key", value_name = "SOURCE")]
+    pub(crate) mint_signer: SignerSource,
 
-    /// Existing payer key; this account also becomes the mint authority.
-    #[arg(long, value_name = "PATH")]
-    pub(crate) key: PathBuf,
+    /// Authority signer source: a path, file:<PATH>, or cosigner:<ENV_PREFIX>.
+    #[arg(long, visible_alias = "key", value_name = "SOURCE")]
+    pub(crate) signer: SignerSource,
 
     /// Number of base-10 digits after the decimal point.
     #[arg(long, default_value_t = 9, value_name = "COUNT")]
@@ -49,8 +47,14 @@ pub(crate) struct Args {
 }
 
 pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
-    let (authority_keypair, authority) = load_existing_key(&args.key, "mint authority key")?;
-    let (mint_keypair, mint) = load_existing_key(&args.mint_key, "mint key")?;
+    let authority_signer =
+        args.signer
+            .resolve(config.network, "create-mint", "mint authority key")?;
+    let mint_signer = args
+        .mint_signer
+        .resolve(config.network, "create-mint", "mint key")?;
+    let authority = authority_signer.pubkey();
+    let mint = mint_signer.pubkey();
     require_distinct_accounts(authority, mint)?;
 
     let freeze_authority = args
@@ -76,7 +80,7 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
         "mint creation",
         instructions,
         authority,
-        vec![authority_keypair, mint_keypair],
+        &[authority_signer.as_ref(), mint_signer.as_ref()],
     )?;
 
     println!("Mint created");
@@ -186,8 +190,8 @@ mod tests {
         let Command::CreateMint(args) = cli.command else {
             panic!("expected create-mint command");
         };
-        assert_eq!(args.mint_key, PathBuf::from("mint.key"));
-        assert_eq!(args.key, PathBuf::from("authority.key"));
+        assert_eq!(args.mint_signer, SignerSource::File("mint.key".into()));
+        assert_eq!(args.signer, SignerSource::File("authority.key".into()));
         assert_eq!(args.decimals, 9);
         assert!(args.freeze_authority.is_none());
         assert!(args.initial_supply.is_none());
@@ -241,6 +245,24 @@ mod tests {
             ])
             .is_err()
         );
+    }
+
+    #[test]
+    fn accepts_independent_cosigner_sources() {
+        let cli = Cli::try_parse_from([
+            "arch-kit",
+            "create-mint",
+            "--mint-signer",
+            "cosigner:mint",
+            "--signer",
+            "cosigner:authority",
+        ])
+        .unwrap();
+        let Command::CreateMint(args) = cli.command else {
+            panic!("expected create-mint command");
+        };
+        assert_eq!(args.mint_signer, SignerSource::Cosigner("MINT".to_string()));
+        assert_eq!(args.signer, SignerSource::Cosigner("AUTHORITY".to_string()));
     }
 
     #[test]

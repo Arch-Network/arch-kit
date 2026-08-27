@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use apl_associated_token_account::create_associated_token_account_idempotent;
 use apl_token::{instruction::transfer_checked, state::AccountState};
 use arch_sdk::{
@@ -9,8 +7,8 @@ use arch_sdk::{
 };
 
 use crate::{
+    arch_signer::SignerSource,
     error::{CliError, Result},
-    keys::load_existing_key,
     token::{associated_token_address, parse_pubkey, read_mint, read_token_account_state},
     transaction::send_and_confirm,
     utils::{format_amount, parse_amount},
@@ -30,9 +28,9 @@ pub(crate) struct UserArgs {
     #[arg(value_name = "AMOUNT")]
     pub(crate) amount: String,
 
-    /// Secret key file for the source owner and transaction payer.
-    #[arg(long, value_name = "PATH")]
-    pub(crate) key: PathBuf,
+    /// Signer source: a path, file:<PATH>, or cosigner:<ENV_PREFIX>.
+    #[arg(long, visible_alias = "key", value_name = "SOURCE")]
+    pub(crate) signer: SignerSource,
 
     /// Source token account; defaults to the signer's ATA for the mint.
     #[arg(long, value_name = "TOKEN_ACCOUNT")]
@@ -53,9 +51,9 @@ pub(crate) struct AccountArgs {
     #[arg(value_name = "AMOUNT")]
     pub(crate) amount: String,
 
-    /// Secret key file for the source owner and transaction payer.
-    #[arg(long, value_name = "PATH")]
-    pub(crate) key: PathBuf,
+    /// Signer source: a path, file:<PATH>, or cosigner:<ENV_PREFIX>.
+    #[arg(long, visible_alias = "key", value_name = "SOURCE")]
+    pub(crate) signer: SignerSource,
 
     /// Source token account; defaults to the signer's ATA for the mint.
     #[arg(long, value_name = "TOKEN_ACCOUNT")]
@@ -70,7 +68,7 @@ pub(crate) fn run_to_user(config: &Config, args: UserArgs) -> Result<()> {
             destination: Destination::User(recipient),
             mint: args.mint,
             amount: args.amount,
-            key: args.key,
+            signer: args.signer,
             source: args.source,
         },
     )
@@ -84,7 +82,7 @@ pub(crate) fn run_to_account(config: &Config, args: AccountArgs) -> Result<()> {
             destination: Destination::Account(destination),
             mint: args.mint,
             amount: args.amount,
-            key: args.key,
+            signer: args.signer,
             source: args.source,
         },
     )
@@ -99,12 +97,15 @@ struct TransferArgs {
     destination: Destination,
     mint: String,
     amount: String,
-    key: PathBuf,
+    signer: SignerSource,
     source: Option<String>,
 }
 
 fn run(config: &Config, args: TransferArgs) -> Result<()> {
-    let (keypair, authority) = load_existing_key(&args.key, "transfer key")?;
+    let signer = args
+        .signer
+        .resolve(config.network, "token-transfer", "transfer key")?;
+    let authority = signer.pubkey();
     let mint_address = parse_pubkey(&args.mint, "mint")?;
     let client = ArchRpcClient::new(config);
     let mint = read_mint(&client, mint_address)?;
@@ -151,7 +152,7 @@ fn run(config: &Config, args: TransferArgs) -> Result<()> {
         "token transfer",
         instructions,
         authority,
-        vec![keypair],
+        &[signer.as_ref()],
     )?;
 
     println!("Token transfer completed");
@@ -294,7 +295,7 @@ mod tests {
         };
         assert_eq!(args.recipient, "recipient");
         assert_eq!(args.amount, "1.25");
-        assert_eq!(args.key, PathBuf::from("owner.key"));
+        assert_eq!(args.signer, SignerSource::File("owner.key".into()));
         assert_eq!(args.source.as_deref(), Some("source"));
     }
 

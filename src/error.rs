@@ -59,6 +59,9 @@ pub(crate) enum CliError {
     #[error("vanity key search failed: {0}")]
     VanitySearch(String),
 
+    #[error("signer error: {0}")]
+    Signer(String),
+
     #[error("account {address} is owned by {actual}, expected APL token program {expected}")]
     TokenProgramOwnerMismatch {
         address: String,

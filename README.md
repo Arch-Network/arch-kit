@@ -44,12 +44,12 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | [`token-account`](#inspect-tokens) | `arch-kit token-account <ADDRESS>` | Inspect one APL token account. |
 | [`token-accounts`](#inspect-tokens) | `arch-kit token-accounts <OWNER>` | List every APL token account owned by an address. |
 | [`mint-info`](#inspect-tokens) | `arch-kit mint-info <MINT>` | Inspect an APL token mint. |
-| [`create-mint`](#create-a-mint) | `arch-kit create-mint --mint-key <PATH> --key <PATH>` | Create an APL token mint with optional initial supply. |
-| [`mint-tokens`](#mint-tokens) | `arch-kit mint-tokens <RECIPIENT> <MINT> <AMOUNT> --key <PATH>` | Mint tokens to a user's ATA. |
-| [`token-transfer`](#transfer-tokens) | `arch-kit token-transfer <RECIPIENT> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens to a user's ATA, creating it idempotently. |
-| [`token-transfer-to-account`](#transfer-tokens) | `arch-kit token-transfer-to-account <DESTINATION> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens directly to an APL token account. |
+| [`create-mint`](#create-a-mint) | `arch-kit create-mint --mint-signer <SOURCE> --signer <SOURCE>` | Create an APL token mint with optional initial supply. |
+| [`mint-tokens`](#mint-tokens) | `arch-kit mint-tokens <RECIPIENT> <MINT> <AMOUNT> --signer <SOURCE>` | Mint tokens to a user's ATA. |
+| [`token-transfer`](#transfer-tokens) | `arch-kit token-transfer <RECIPIENT> <MINT> <AMOUNT> --signer <SOURCE>` | Transfer tokens to a user's ATA, creating it idempotently. |
+| [`token-transfer-to-account`](#transfer-tokens) | `arch-kit token-transfer-to-account <DESTINATION> <MINT> <AMOUNT> --signer <SOURCE>` | Transfer tokens directly to an APL token account. |
 | [`faucet`](#fund-an-account) | `arch-kit faucet --key <PATH>` | Create or fund an account using a non-mainnet faucet. |
-| [`transfer-arch`](#transfer-native-arch) | `arch-kit transfer-arch <DESTINATION> <AMOUNT> --key <PATH>` | Transfer native ARCH to an account. |
+| [`transfer-arch`](#transfer-native-arch) | `arch-kit transfer-arch <DESTINATION> <AMOUNT> --signer <SOURCE>` | Transfer native ARCH to an account. |
 | [`arch-balance`](#inspect-native-arch) | `arch-kit arch-balance <ACCOUNT>` | Read an account's native ARCH balance. |
 
 Run `arch-kit <COMMAND> --help` for the complete option list.
@@ -67,6 +67,23 @@ Explicit arguments override environment variables and defaults. Place them
 before the command, for example `arch-kit --bitcoin-network regtest deploy ...`.
 Supported networks are `mainnet`, `testnet`, `testnet4`, `signet`, and
 `regtest`.
+
+## Transaction signers
+
+Transaction commands accept local files and remote arch-cosigner roles through
+the same source format:
+
+```bash
+--signer file:./keys/authority.key
+--signer cosigner:TREASURY
+```
+
+A bare path is treated as a local file. `cosigner:TREASURY` reads
+`TREASURY_COSIGNER_URL`, `TREASURY_COSIGNER_TOKEN`,
+`TREASURY_COSIGNER_ROLE`, and `TREASURY_COSIGNER_PUBKEY`; the public key must
+be 64-character hex. Existing `--key` and `--mint-key` spellings remain aliases.
+Deployment and faucet funding remain file-only until their SDK helpers accept
+external signers.
 
 ## Initialize a program
 
@@ -158,8 +175,8 @@ Create a mint using existing mint and authority key files:
 
 ```bash
 arch-kit create-mint \
-  --mint-key ./keys/mint.key \
-  --key ./keys/authority.key \
+  --mint-signer file:./keys/mint.key \
+  --signer file:./keys/authority.key \
   --decimals 6 \
   --initial-supply 1000000
 ```
@@ -174,7 +191,7 @@ supply is minted to the authority's ATA in the same transaction. Add
 Mint additional tokens to a user's ATA, creating it idempotently when needed:
 
 ```bash
-arch-kit mint-tokens <RECIPIENT> <MINT> 100 --key ./keys/authority.key
+arch-kit mint-tokens <RECIPIENT> <MINT> 100 --signer file:./keys/authority.key
 ```
 
 Amounts are interpreted using the mint's decimals. Fixed-supply mints reject
@@ -186,14 +203,14 @@ Transfer tokens from the signing key's ATA to another user's ATA. The recipient
 ATA is derived and idempotently created in the same transaction:
 
 ```bash
-arch-kit token-transfer <RECIPIENT> <MINT> 1.25 --key ./keys/owner.key
+arch-kit token-transfer <RECIPIENT> <MINT> 1.25 --signer file:./keys/owner.key
 ```
 
 Transfer directly to an existing token account, including a non-ATA account:
 
 ```bash
 arch-kit token-transfer-to-account <TOKEN_ACCOUNT> <MINT> 1.25 \
-  --key ./keys/owner.key
+  --signer file:./keys/owner.key
 ```
 
 Amounts are human-readable decimals interpreted using the mint's configured
@@ -217,7 +234,7 @@ and reports the resulting native ARCH balance.
 Transfer native ARCH using a local secret key file:
 
 ```bash
-arch-kit transfer-arch <DESTINATION> 0.1 --key ./keys/owner.key
+arch-kit transfer-arch <DESTINATION> 0.1 --signer file:./keys/owner.key
 ```
 
 ARCH uses nine decimal places. The command validates the sender's system
@@ -228,7 +245,7 @@ place the shared network arguments before the command:
 ```bash
 arch-kit --rpc-url https://rpc.mainnet.arch.network \
   --bitcoin-network mainnet \
-  transfer-arch <DESTINATION> 0.1 --key ./keys/owner.key
+  transfer-arch <DESTINATION> 0.1 --signer file:./keys/owner.key
 ```
 
 ## Inspect native ARCH

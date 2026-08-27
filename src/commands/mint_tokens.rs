@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use arch_sdk::{
     Config,
     arch_program::{program_option::COption, pubkey::Pubkey},
@@ -7,8 +5,8 @@ use arch_sdk::{
 };
 
 use crate::{
+    arch_signer::SignerSource,
     error::{CliError, Result},
-    keys::load_existing_key,
     token::{mint_to_user_instructions, parse_pubkey, read_mint},
     transaction::send_and_confirm,
     utils::{format_amount, parse_amount},
@@ -28,13 +26,16 @@ pub(crate) struct Args {
     #[arg(value_name = "AMOUNT")]
     pub(crate) amount: String,
 
-    /// Existing payer and mint-authority secret key file.
-    #[arg(long, value_name = "PATH")]
-    pub(crate) key: PathBuf,
+    /// Signer source: a path, file:<PATH>, or cosigner:<ENV_PREFIX>.
+    #[arg(long, visible_alias = "key", value_name = "SOURCE")]
+    pub(crate) signer: SignerSource,
 }
 
 pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
-    let (authority_keypair, authority) = load_existing_key(&args.key, "mint authority key")?;
+    let signer = args
+        .signer
+        .resolve(config.network, "mint-tokens", "mint authority key")?;
+    let authority = signer.pubkey();
     let recipient = parse_pubkey(&args.recipient, "recipient")?;
     let mint_address = parse_pubkey(&args.mint, "mint")?;
     let client = ArchRpcClient::new(config);
@@ -55,7 +56,7 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
         "token minting",
         instructions,
         authority,
-        vec![authority_keypair],
+        &[signer.as_ref()],
     )?;
 
     println!("Tokens minted");
@@ -116,7 +117,7 @@ mod tests {
         assert_eq!(args.recipient, "recipient");
         assert_eq!(args.mint, "mint");
         assert_eq!(args.amount, "1.25");
-        assert_eq!(args.key, PathBuf::from("authority.key"));
+        assert_eq!(args.signer, SignerSource::File("authority.key".into()));
     }
 
     #[test]

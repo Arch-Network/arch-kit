@@ -7,6 +7,7 @@ edition = "2024"
 apl-associated-token-account = { version = "=0.8.2", features = ["no-entrypoint"] }
 apl-token = { version = "=0.8.2", features = ["no-entrypoint"] }
 arch_sdk = "=0.8.2"
+base64 = "0.22"
 bitcoin = "=0.32.7"
 bs58 = "0.5"
 clap = { version = "4.5", features = ["derive", "env"] }
@@ -15,6 +16,7 @@ hex = "0.4"
 include_dir = "0.7"
 minijinja = "2"
 rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde_json = "1.0"
 thiserror = "2.0"
 

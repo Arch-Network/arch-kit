@@ -1,3 +1,4 @@
+mod arch_signer;
 mod cli;
 mod commands;
 mod error;

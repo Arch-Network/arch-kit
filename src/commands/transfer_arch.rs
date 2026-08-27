@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use arch_sdk::{
     AccountInfo, Config,
     arch_program::{instruction::Instruction, pubkey::Pubkey, system_instruction, system_program},
@@ -7,8 +5,8 @@ use arch_sdk::{
 };
 
 use crate::{
+    arch_signer::SignerSource,
     error::{CliError, Result},
-    keys::load_existing_key,
     token::parse_pubkey,
     transaction::send_and_confirm,
     utils::{format_amount, parse_amount},
@@ -27,13 +25,16 @@ pub(crate) struct Args {
     #[arg(value_name = "AMOUNT")]
     pub(crate) amount: String,
 
-    /// Secret key file for the sender and transaction payer.
-    #[arg(long, value_name = "PATH")]
-    pub(crate) key: PathBuf,
+    /// Signer source: a path, file:<PATH>, or cosigner:<ENV_PREFIX>.
+    #[arg(long, visible_alias = "key", value_name = "SOURCE")]
+    pub(crate) signer: SignerSource,
 }
 
 pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
-    let (keypair, source) = load_existing_key(&args.key, "transfer key")?;
+    let signer = args
+        .signer
+        .resolve(config.network, "native-arch-transfer", "transfer key")?;
+    let source = signer.pubkey();
     let destination = parse_pubkey(&args.destination, "destination")?;
     require_distinct_accounts(source, destination)?;
 
@@ -52,7 +53,7 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
         "native ARCH transfer",
         vec![instruction],
         source,
-        vec![keypair],
+        &[signer.as_ref()],
     )?;
 
     println!("ARCH transfer completed");
@@ -137,7 +138,7 @@ mod tests {
         };
         assert_eq!(args.destination, "destination");
         assert_eq!(args.amount, "0.1");
-        assert_eq!(args.key, PathBuf::from("owner.key"));
+        assert_eq!(args.signer, SignerSource::File("owner.key".into()));
         assert_eq!(
             parse_amount(&args.amount, ARCH_DECIMALS).unwrap(),
             100_000_000
@@ -147,6 +148,23 @@ mod tests {
     #[test]
     fn requires_a_transfer_key() {
         assert!(Cli::try_parse_from(["arch-kit", "transfer-arch", "destination", "0.1"]).is_err());
+    }
+
+    #[test]
+    fn accepts_a_cosigner() {
+        let cli = Cli::try_parse_from([
+            "arch-kit",
+            "transfer-arch",
+            "destination",
+            "0.1",
+            "--signer",
+            "cosigner:treasury",
+        ])
+        .unwrap();
+        let Command::TransferArch(args) = cli.command else {
+            panic!("expected transfer-arch command");
+        };
+        assert_eq!(args.signer, SignerSource::Cosigner("TREASURY".to_string()));
     }
 
     #[test]
