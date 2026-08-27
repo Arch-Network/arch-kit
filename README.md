@@ -44,8 +44,10 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | [`token-account`](#inspect-tokens) | `arch-kit token-account <ADDRESS>` | Inspect one APL token account. |
 | [`token-accounts`](#inspect-tokens) | `arch-kit token-accounts <OWNER>` | List every APL token account owned by an address. |
 | [`mint-info`](#inspect-tokens) | `arch-kit mint-info <MINT>` | Inspect an APL token mint. |
+| [`create-mint`](#create-a-mint) | `arch-kit create-mint --mint-key <PATH> --key <PATH>` | Create a zero-supply APL token mint. |
 | [`token-transfer`](#transfer-tokens) | `arch-kit token-transfer <RECIPIENT> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens to a user's ATA, creating it idempotently. |
 | [`token-transfer-to-account`](#transfer-tokens) | `arch-kit token-transfer-to-account <DESTINATION> <MINT> <AMOUNT> --key <PATH>` | Transfer tokens directly to an APL token account. |
+| [`faucet`](#fund-an-account) | `arch-kit faucet --key <PATH>` | Create or fund an account using a non-mainnet faucet. |
 | [`transfer-arch`](#transfer-native-arch) | `arch-kit transfer-arch <DESTINATION> <AMOUNT> --key <PATH>` | Transfer native ARCH to an account. |
 
 Run `arch-kit <COMMAND> --help` for the complete option list.
@@ -148,6 +150,20 @@ amounts are encoded as strings in JSON to preserve full `u64` precision. A
 missing ATA has a zero balance and `exists: false`, while malformed or
 incorrectly owned accounts are errors.
 
+## Create a mint
+
+Create a zero-supply mint using existing mint and authority key files:
+
+```bash
+arch-kit create-mint \
+  --mint-key ./keys/mint.key \
+  --key ./keys/authority.key \
+  --decimals 6
+```
+
+Decimals default to `9`. The payer also becomes the mint authority. Mints are
+non-freezable by default; pass `--freeze-authority <PUBKEY>` to set one.
+
 ## Transfer tokens
 
 Transfer tokens from the signing key's ATA to another user's ATA. The recipient
@@ -168,6 +184,17 @@ Amounts are human-readable decimals interpreted using the mint's configured
 decimals. Both commands derive the source ATA from the signing key by default;
 pass `--source <TOKEN_ACCOUNT>` to use another token account owned by the same
 signer.
+
+## Fund an account
+
+Create or top up an account through the configured network's faucet:
+
+```bash
+arch-kit faucet --key ./keys/owner.key
+```
+
+The command is unavailable on mainnet. It waits for funding to be processed
+and reports the resulting native ARCH balance.
 
 ## Transfer native ARCH
 

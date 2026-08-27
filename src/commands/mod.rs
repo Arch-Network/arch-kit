@@ -1,5 +1,7 @@
 pub(crate) mod ata;
+pub(crate) mod create_mint;
 pub(crate) mod deploy;
+pub(crate) mod faucet;
 pub(crate) mod health;
 pub(crate) mod init;
 pub(crate) mod keygen;

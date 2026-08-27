@@ -3,20 +3,16 @@ use std::path::PathBuf;
 use apl_associated_token_account::create_associated_token_account_idempotent;
 use apl_token::{instruction::transfer_checked, state::AccountState};
 use arch_sdk::{
-    Config, Status,
-    arch_program::{
-        hash::Hash, instruction::Instruction, pubkey::Pubkey, sanitized::ArchMessage,
-        system_program,
-    },
+    Config,
+    arch_program::{instruction::Instruction, pubkey::Pubkey, system_program},
     blocking::ArchRpcClient,
-    build_and_sign_transaction,
 };
-use bitcoin::key::Keypair;
 
 use crate::{
     error::{CliError, Result},
     keys::load_existing_key,
     token::{associated_token_address, parse_pubkey, read_mint, read_token_account_state},
+    transaction::send_and_confirm,
     utils::{format_amount, parse_amount},
 };
 
@@ -150,7 +146,13 @@ fn run(config: &Config, args: TransferArgs) -> Result<()> {
         amount,
         mint.state.decimals,
     )?;
-    let transaction_id = send(&client, authority, keypair, instructions)?;
+    let transaction_id = send_and_confirm(
+        &client,
+        "token transfer",
+        instructions,
+        authority,
+        vec![keypair],
+    )?;
 
     println!("Token transfer completed");
     println!("  Transaction: {transaction_id}");
@@ -263,29 +265,6 @@ fn transfer_instructions(
         })?,
     );
     Ok(instructions)
-}
-
-fn send(
-    client: &ArchRpcClient,
-    payer: Pubkey,
-    keypair: Keypair,
-    instructions: Vec<Instruction>,
-) -> Result<Hash> {
-    let message = ArchMessage::new(
-        &instructions,
-        Some(payer),
-        client.get_best_finalized_block_hash()?,
-    );
-    let transaction = build_and_sign_transaction(message, vec![keypair], client.config.network)?;
-    let transaction_id = client.send_transaction(transaction)?;
-    let processed = client.wait_for_processed_transaction(&transaction_id)?;
-    if processed.status != Status::Processed {
-        return Err(CliError::TransactionFailed {
-            action: "token transfer".to_string(),
-            status: format!("{:?}", processed.status),
-        });
-    }
-    Ok(transaction_id)
 }
 
 #[cfg(test)]

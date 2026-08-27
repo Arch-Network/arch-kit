@@ -62,6 +62,31 @@ jobs:
 
           echo "Verified generated public key: ${public_key}"
 
+      - name: Faucet funding and native transfer
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          e2e_root="${RUNNER_TEMP}/arch-kit-faucet-e2e"
+          sender_key="${e2e_root}/sender.key"
+          recipient_key="${e2e_root}/recipient.key"
+
+          mkdir -p "${e2e_root}"
+          ./target/release/arch-kit keygen "${sender_key}" "${recipient_key}"
+          recipient="$(./target/release/arch-kit pubkey "${recipient_key}")"
+
+          ./target/release/arch-kit \
+            --rpc-url https://rpc.testnet.arch.network \
+            --bitcoin-network testnet \
+            faucet \
+            --key "${sender_key}"
+
+          ./target/release/arch-kit \
+            --rpc-url https://rpc.testnet.arch.network \
+            --bitcoin-network testnet \
+            transfer-arch "${recipient}" 0.0001 \
+            --key "${sender_key}"
+
       - name: Install SBF build dependencies
         shell: bash
         run: |

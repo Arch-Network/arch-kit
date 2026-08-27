@@ -5,6 +5,7 @@ mod idl;
 mod keys;
 mod network;
 mod token;
+mod transaction;
 mod utils;
 mod vanity;
 
@@ -46,6 +47,9 @@ fn run() -> Result<()> {
         Command::MintInfo(args) => {
             commands::mint_info::run(&network::config(rpc_url, bitcoin_network)?, args)
         }
+        Command::CreateMint(args) => {
+            commands::create_mint::run(&network::config(rpc_url, bitcoin_network)?, args)
+        }
         Command::TokenTransfer(args) => {
             commands::token_transfer::run_to_user(&network::config(rpc_url, bitcoin_network)?, args)
         }
@@ -55,6 +59,9 @@ fn run() -> Result<()> {
         ),
         Command::TransferArch(args) => {
             commands::transfer_arch::run(&network::config(rpc_url, bitcoin_network)?, args)
+        }
+        Command::Faucet(args) => {
+            commands::faucet::run(&network::config(rpc_url, bitcoin_network)?, args)
         }
         Command::Health => commands::health::run(&network::config(rpc_url, bitcoin_network)?),
         Command::Deploy(args) => {

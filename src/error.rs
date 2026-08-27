@@ -75,6 +75,9 @@ pub(crate) enum CliError {
     #[error("token transfer failed: {0}")]
     TokenTransfer(String),
 
+    #[error("mint creation failed: {0}")]
+    MintCreation(String),
+
     #[error("native ARCH transfer failed: {0}")]
     NativeTransfer(String),
 
@@ -123,7 +126,7 @@ pub(crate) enum CliError {
     #[error("IDL payload is too large for the protocol length field: {bytes} bytes")]
     IdlPayloadTooLarge { bytes: usize },
 
-    #[error("--fund-authority cannot be used with the mainnet signing network")]
+    #[error("faucet funding cannot be used with the mainnet signing network")]
     MainnetFaucetUnsupported,
 
     #[error("program deployment failed: {0}")]

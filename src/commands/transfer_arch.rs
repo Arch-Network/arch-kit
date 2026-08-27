@@ -1,20 +1,16 @@
 use std::path::PathBuf;
 
 use arch_sdk::{
-    AccountInfo, Config, Status,
-    arch_program::{
-        hash::Hash, instruction::Instruction, pubkey::Pubkey, sanitized::ArchMessage,
-        system_instruction, system_program,
-    },
+    AccountInfo, Config,
+    arch_program::{instruction::Instruction, pubkey::Pubkey, system_instruction, system_program},
     blocking::ArchRpcClient,
-    build_and_sign_transaction,
 };
-use bitcoin::key::Keypair;
 
 use crate::{
     error::{CliError, Result},
     keys::load_existing_key,
     token::parse_pubkey,
+    transaction::send_and_confirm,
     utils::{format_amount, parse_amount},
 };
 
@@ -51,7 +47,13 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
     validate_source_account(source, &source_account, required_balance)?;
 
     let instruction = transfer_instruction(source, destination, amount);
-    let transaction_id = send(&client, source, keypair, instruction)?;
+    let transaction_id = send_and_confirm(
+        &client,
+        "native ARCH transfer",
+        vec![instruction],
+        source,
+        vec![keypair],
+    )?;
 
     println!("ARCH transfer completed");
     println!("  Transaction: {transaction_id}");
@@ -110,29 +112,6 @@ fn validate_source_account(
         )));
     }
     Ok(())
-}
-
-fn send(
-    client: &ArchRpcClient,
-    payer: Pubkey,
-    keypair: Keypair,
-    instruction: Instruction,
-) -> Result<Hash> {
-    let message = ArchMessage::new(
-        &[instruction],
-        Some(payer),
-        client.get_best_finalized_block_hash()?,
-    );
-    let transaction = build_and_sign_transaction(message, vec![keypair], client.config.network)?;
-    let transaction_id = client.send_transaction(transaction)?;
-    let processed = client.wait_for_processed_transaction(&transaction_id)?;
-    if processed.status != Status::Processed {
-        return Err(CliError::TransactionFailed {
-            action: "native ARCH transfer".to_string(),
-            status: format!("{:?}", processed.status),
-        });
-    }
-    Ok(transaction_id)
 }
 
 #[cfg(test)]
