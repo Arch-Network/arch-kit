@@ -1,0 +1,84 @@
+name: Program Deployment
+
+on:
+  push:
+
+permissions:
+  contents: read
+
+env:
+  ARCH_RPC_URL: https://rpc.testnet.arch.network
+  ARCH_BITCOIN_NETWORK: testnet
+  CARGO_TERM_COLOR: always
+
+jobs:
+  deploy:
+    name: Initialize and Deploy
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Rust toolchains
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          rustflags: ""
+          cache-workspaces: |
+            . -> target
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -qq \
+            libc6-dev-i386 \
+            libclang-dev
+          rustup toolchain install nightly --profile minimal
+
+      - name: Build arch-kit
+        run: cargo build --release --locked
+
+      - name: Check testnet health
+        run: ./target/release/arch-kit health
+
+      - name: Install SBF toolchain
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://release.anza.xyz/v3.1.9/install" | sh
+          echo "${HOME}/.local/share/solana/install/active_release/bin" >> "${GITHUB_PATH}"
+
+      - name: Initialize and build program
+        run: |
+          set -euo pipefail
+
+          deployment_root="${RUNNER_TEMP}/arch-kit-program-deployment"
+          authority_key="${deployment_root}/authority.key"
+          program_key="${deployment_root}/program.key"
+          program_dir="${deployment_root}/hello-world"
+          artifact_dir="${deployment_root}/artifacts"
+
+          mkdir -p "${deployment_root}" "${artifact_dir}"
+          ./target/release/arch-kit keygen "${authority_key}" "${program_key}"
+          ./target/release/arch-kit init "${program_dir}" --program-key "${program_key}"
+          ./target/release/arch-kit build-idl \
+            "${program_dir}" \
+            "${artifact_dir}/hello_world.json"
+          cargo-build-sbf \
+            --manifest-path "${program_dir}/Cargo.toml" \
+            --sbf-out-dir "${artifact_dir}"
+          test -s "${artifact_dir}/hello_world.so"
+          test -s "${artifact_dir}/hello_world.json"
+
+      - name: Deploy program and IDL
+        run: |
+          set -euo pipefail
+
+          deployment_root="${RUNNER_TEMP}/arch-kit-program-deployment"
+          ./target/release/arch-kit deploy \
+            --elf "${deployment_root}/artifacts/hello_world.so" \
+            --idl "${deployment_root}/artifacts/hello_world.json" \
+            --program-key "${deployment_root}/program.key" \
+            --authority "${deployment_root}/authority.key" \
+            --fund-authority

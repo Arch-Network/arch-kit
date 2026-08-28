@@ -2,8 +2,9 @@ use clap::{Parser, Subcommand};
 
 use crate::{
     commands::{
-        arch_balance, ata, create_mint, deploy, faucet, init, keygen, mint_info, mint_tokens,
-        pubkey, token_account, token_accounts, token_balance, token_transfer, transfer_arch,
+        arch_balance, ata, build_idl, create_mint, deploy, faucet, init, keygen, mint_info,
+        mint_tokens, pubkey, token_account, token_accounts, token_balance, token_transfer,
+        transfer_arch,
     },
     network::{BitcoinNetwork, DEFAULT_RPC_URL},
 };
@@ -40,6 +41,9 @@ pub(crate) struct Cli {
 pub(crate) enum Command {
     /// Initialize a new Satellite program from an existing program key.
     Init(init::Args),
+
+    /// Build a Satellite program's IDL JSON.
+    BuildIdl(build_idl::Args),
 
     /// Deploy or update a program and optionally publish its IDL.
     Deploy(deploy::Args),

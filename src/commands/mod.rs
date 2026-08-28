@@ -1,5 +1,6 @@
 pub(crate) mod arch_balance;
 pub(crate) mod ata;
+pub(crate) mod build_idl;
 pub(crate) mod create_mint;
 pub(crate) mod deploy;
 pub(crate) mod faucet;

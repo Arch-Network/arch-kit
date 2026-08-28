@@ -18,7 +18,7 @@ pub mod {{ module_name }} {
 
 #[derive(Accounts)]
 pub struct SayHello<'info> {
-    /// User whose Base58 public key is written to the program log.
+    /// CHECK: This account is only read to log its public key and must sign.
     #[account(signer @ HelloWorldError::UserMustSign)]
     pub user: UncheckedAccount<'info>,
 }

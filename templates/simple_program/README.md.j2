@@ -14,6 +14,7 @@ Satellite IDL generation requires Rust nightly:
 
 ```bash
 rustup toolchain install nightly
+arch-kit build-idl . ./target/idl/{{ crate_name }}.json
 ```
 
 The `say_hello` instruction requires one user signer and logs

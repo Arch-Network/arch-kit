@@ -35,6 +35,7 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | Command | Usage | Description |
 | --- | --- | --- |
 | [`init`](#initialize-a-program) | `arch-kit init <PATH> --program-key <PATH>` | Initialize a new Satellite Hello World program. |
+| [`build-idl`](#build-a-program-idl) | `arch-kit build-idl <PROGRAM_PATH> <OUTPUT>` | Build a Satellite program's IDL JSON. |
 | [`keygen`](#generate-keys) | `arch-kit keygen [OPTIONS] <PATH>...` | Generate one or more secp256k1 key files, with optional public key prefixes (vanity). |
 | [`pubkey`](#derive-a-public-key) | `arch-kit pubkey <PATH>` | Derive a Base58 Arch public key from a secret key file. |
 | [`deploy`](#deploy-a-program) | `arch-kit deploy [OPTIONS]` | Deploy or update a program and its IDL. |
@@ -103,6 +104,17 @@ path explicitly:
 ```bash
 cargo build-sbf --manifest-path ./hello-world/Cargo.toml
 ```
+
+## Build a program IDL
+
+Generate the Satellite IDL JSON before publishing it with `deploy --idl`:
+
+```bash
+arch-kit build-idl ./hello-world ./target/idl/hello_world.json
+```
+
+The Satellite builder uses Rust nightly and derives the IDL from the program's
+declared instructions and accounts.
 
 ## Check node health
 

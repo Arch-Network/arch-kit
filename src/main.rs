@@ -33,6 +33,7 @@ fn run() -> Result<()> {
 
     match command {
         Command::Init(args) => commands::init::run(args),
+        Command::BuildIdl(args) => commands::build_idl::run(args),
         Command::Keygen(args) => commands::keygen::run(args),
         Command::Pubkey(args) => commands::pubkey::run(args),
         Command::Ata(args) => commands::ata::run(args),

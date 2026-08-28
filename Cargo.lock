@@ -68,10 +68,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "apl-associated-token-account"
-version = "0.8.2"
+name = "anyhow"
+version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02ef59b69b443b593edc556030df0f73c02584638710b150ea7f0463e75fc547"
+checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+
+[[package]]
+name = "apl-associated-token-account"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "afcfcf3505aa60fdc3d63465f8d3a9f268e38b2566fa6bb26ee69b59728c5578"
 dependencies = [
  "apl-token",
  "arch_program",
@@ -88,9 +94,9 @@ dependencies = [
 
 [[package]]
 name = "apl-token"
-version = "0.8.2"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a89f87a23d789fdda592943cfab7ccfa0fa4c7841ee355db662f05b78ad2b2f"
+checksum = "bd8f96beb256b1db4cfc62ce28bba8961e667b1b6f025ce4c1e41f092b79faa5"
 dependencies = [
  "arch_program",
  "arrayref",
@@ -110,6 +116,7 @@ version = "0.1.0"
 dependencies = [
  "apl-associated-token-account",
  "apl-token",
+ "arch-satellite-lang-idl",
  "arch_sdk",
  "base64 0.22.1",
  "bitcoin",
@@ -124,6 +131,29 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "arch-satellite-lang-idl"
+version = "0.31.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0366b0bcc9a238907322314ba984518cd487cd66e07643aae97c63f1aab66748"
+dependencies = [
+ "anyhow",
+ "arch-satellite-lang-idl-spec",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "arch-satellite-lang-idl-spec"
+version = "0.31.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1be9b3cefaf42f385698357da69b7a2818a3b1d4c069c3013f9250ed88477cc0"
+dependencies = [
+ "anyhow",
+ "serde",
 ]
 
 [[package]]
@@ -178,9 +208,9 @@ dependencies = [
 
 [[package]]
 name = "arch_program"
-version = "0.8.2"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "853e526e267f202b8e59adde55b98f044beed3a8e19cf7b78a70110d779ed05b"
+checksum = "73152bac685d5393c467a9eb8eb61aac721a2360d149926503dc4e5d4511e14e"
 dependencies = [
  "arch-titan-types-core",
  "base64 0.22.1",
@@ -211,9 +241,9 @@ dependencies = [
 
 [[package]]
 name = "arch_sdk"
-version = "0.8.2"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "295059c66fea10eb2cfde6c320abc05197545af1c3b3a9f098e84724f7154736"
+checksum = "1558aa657556a8bda3cb80f63bcd1ebec5d060c6b5b68131756f5df2abf3e7e4"
 dependencies = [
  "arch-titan-client",
  "arch_program",
@@ -1800,6 +1830,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "caa0f4137e1c0a72f4c651489402276c8e8e1cf081f3b0ba156d2cbeef09e86a"
 dependencies = [
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "regex"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]
