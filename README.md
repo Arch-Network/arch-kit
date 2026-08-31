@@ -74,14 +74,25 @@ Install it with `rustup toolchain install nightly`; Satellite's
 
 ## Commands
 
+### Program development and deployment
+
 | Command | Usage | Description |
 | --- | --- | --- |
 | [`init`](#initialize-a-program) | `arch-kit init <PATH> --program-key <PATH>` | Initialize a new Satellite Hello World program. |
 | [`build-idl`](#build-a-program-idl) | `arch-kit build-idl <PROGRAM_PATH> <OUTPUT>` | Build a Satellite program's IDL JSON. |
+| [`deploy`](#deploy-a-program) | `arch-kit deploy [OPTIONS]` | Deploy or update a program and its IDL. |
+
+### Key management
+
+| Command | Usage | Description |
+| --- | --- | --- |
 | [`keygen`](#generate-keys) | `arch-kit keygen [OPTIONS] <PATH>...` | Generate one or more secp256k1 key files, with optional public key prefixes (vanity). |
 | [`pubkey`](#derive-a-public-key) | `arch-kit pubkey <PATH>` | Derive a Base58 Arch public key from a secret key file. |
-| [`deploy`](#deploy-a-program) | `arch-kit deploy [OPTIONS]` | Deploy or update a program and its IDL. |
-| [`health`](#check-node-health) | `arch-kit health` | Check validator readiness and block progression. |
+
+### Token program
+
+| Command | Usage | Description |
+| --- | --- | --- |
 | [`ata`](#inspect-tokens) | `arch-kit ata <OWNER> <MINT>` | Derive an associated token account address. |
 | [`token-balance`](#inspect-tokens) | `arch-kit token-balance <OWNER> <MINT>` | Read an owner's ATA balance for a mint. |
 | [`token-account`](#inspect-tokens) | `arch-kit token-account <ADDRESS>` | Inspect one APL token account. |
@@ -91,9 +102,20 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | [`mint-tokens`](#mint-tokens) | `arch-kit mint-tokens <RECIPIENT> <MINT> <AMOUNT> --signer <SOURCE>` | Mint tokens to a user's ATA. |
 | [`token-transfer`](#transfer-tokens) | `arch-kit token-transfer <RECIPIENT> <MINT> <AMOUNT> --signer <SOURCE>` | Transfer tokens to a user's ATA, creating it idempotently. |
 | [`token-transfer-to-account`](#transfer-tokens) | `arch-kit token-transfer-to-account <DESTINATION> <MINT> <AMOUNT> --signer <SOURCE>` | Transfer tokens directly to an APL token account. |
+
+### Native ARCH
+
+| Command | Usage | Description |
+| --- | --- | --- |
 | [`faucet`](#fund-an-account) | `arch-kit faucet --key <PATH>` | Create or fund an account using a non-mainnet faucet. |
 | [`transfer-arch`](#transfer-native-arch) | `arch-kit transfer-arch <DESTINATION> <AMOUNT> --signer <SOURCE>` | Transfer native ARCH to an account. |
 | [`arch-balance`](#inspect-native-arch) | `arch-kit arch-balance <ACCOUNT>` | Read an account's native ARCH balance. |
+
+### Network
+
+| Command | Usage | Description |
+| --- | --- | --- |
+| [`health`](#check-node-health) | `arch-kit health` | Check validator readiness and block progression. |
 
 Run `arch-kit <COMMAND> --help` for the complete option list.
 
