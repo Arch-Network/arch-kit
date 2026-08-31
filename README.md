@@ -5,7 +5,13 @@ canonical on-chain IDLs, and inspecting APL tokens.
 
 ## Install
 
-Install from this repository with Cargo:
+Install the published crate with Cargo:
+
+```bash
+cargo install arch-kit --locked
+```
+
+Install from this repository when developing arch-kit itself:
 
 ```bash
 cargo install --path .
@@ -23,6 +29,42 @@ After pulling changes, update the installed binary with:
 ```bash
 cargo install --path . --force
 ```
+
+## GitHub deployment workflow
+
+Store the program and authority key contents as `PROGRAM_KEY` and
+`AUTHORITY_KEY` repository secrets. Both accept the same hex or SDK-compatible
+JSON formats as local key files. A program repository can then build and deploy
+with the reusable workflow:
+
+```yaml
+jobs:
+  deploy:
+    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.0
+    with:
+      program-path: program
+      bitcoin-network: testnet
+      rpc-url: https://rpc.testnet.arch.network
+      fund-authority: true
+    secrets:
+      PROGRAM_KEY: ${{ secrets.PROGRAM_KEY }}
+      AUTHORITY_KEY: ${{ secrets.AUTHORITY_KEY }}
+```
+
+When `idl-path` is omitted, the workflow builds the Satellite IDL from the
+program. Programs with manually maintained IDLs can bypass that step:
+
+```yaml
+    with:
+      program-path: program
+      idl-path: idl/program.json
+      idl-size: 20000
+```
+
+The workflow builds the SBF ELF, checks node health, and deploys or upgrades
+the program and canonical IDL. Faucet funding is disabled unless explicitly
+enabled. Reusing the same two key secrets updates the existing deployment;
+changing the program key creates a new deployment.
 
 ## Program development
 
@@ -297,3 +339,12 @@ Reserve enough capacity for future upgrades because a populated IDL account
 cannot be grown. The target program must include compatible canonical Satellite
 IDL handlers. If IDL publication fails, the deployed program remains deployed
 and its program ID is included in the error.
+
+## Publishing arch-kit
+
+Maintainers publish from GitHub Actions using the `Publish Crate` workflow.
+Configure a protected `crates-io` environment containing the
+`CRATES_IO_TOKEN` secret, update `Cargo.toml`, `Cargo.lock`, and the pinned
+`ARCH_KIT_VERSION` in the reusable workflow, then run the workflow with that
+version. After publication, create the matching immutable Git tag, such as
+`v0.1.0`, for workflow consumers.

@@ -1,0 +1,240 @@
+name: Deploy Arch Program
+
+on:
+  workflow_call:
+    inputs:
+      program-path:
+        description: Program directory containing Cargo.toml
+        required: true
+        type: string
+      idl-path:
+        description: Optional ready IDL JSON path; generated when omitted
+        required: false
+        default: ""
+        type: string
+      rpc-url:
+        description: Arch JSON-RPC endpoint
+        required: false
+        default: https://rpc.testnet.arch.network
+        type: string
+      bitcoin-network:
+        description: Bitcoin network used for Arch transaction signatures
+        required: false
+        default: testnet
+        type: string
+      fund-authority:
+        description: Fund the authority through the configured faucet
+        required: false
+        default: false
+        type: boolean
+      idl-size:
+        description: Initial IDL account size; zero uses the arch-kit default
+        required: false
+        default: 0
+        type: number
+    secrets:
+      PROGRAM_KEY:
+        description: Program private key as hex or SDK-compatible JSON
+        required: true
+      AUTHORITY_KEY:
+        description: Deployment authority private key as hex or SDK-compatible JSON
+        required: true
+    outputs:
+      program-id:
+        description: Base58 public key of the deployed program
+        value: ${{ jobs.deploy.outputs.program-id }}
+
+permissions:
+  contents: read
+
+env:
+  ARCH_KIT_VERSION: 0.1.0
+  ANZA_VERSION: v3.1.9
+  CARGO_TERM_COLOR: always
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-24.04
+    outputs:
+      program-id: ${{ steps.keys.outputs.program-id }}
+
+    steps:
+      - name: Checkout program repository
+        uses: actions/checkout@v5
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          rustflags: ""
+          cache-workspaces: |
+            . -> target
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install --no-install-recommends -qq \
+            libc6-dev-i386 \
+            libclang-dev
+
+      - name: Install arch-kit
+        run: cargo install arch-kit --version "${ARCH_KIT_VERSION}" --locked
+
+      - name: Stage deployment keys
+        id: keys
+        env:
+          PROGRAM_KEY_VALUE: ${{ secrets.PROGRAM_KEY }}
+          AUTHORITY_KEY_VALUE: ${{ secrets.AUTHORITY_KEY }}
+        run: |
+          set -euo pipefail
+
+          key_dir="${RUNNER_TEMP}/arch-kit-deploy/keys"
+          program_key="${key_dir}/program.key"
+          authority_key="${key_dir}/authority.key"
+          test -n "${PROGRAM_KEY_VALUE}"
+          test -n "${AUTHORITY_KEY_VALUE}"
+
+          umask 077
+          mkdir -p "${key_dir}"
+          printf '%s\n' "${PROGRAM_KEY_VALUE}" > "${program_key}"
+          printf '%s\n' "${AUTHORITY_KEY_VALUE}" > "${authority_key}"
+          chmod 600 "${program_key}" "${authority_key}"
+
+          program_id="$(arch-kit pubkey "${program_key}")"
+          echo "program-id=${program_id}" >> "${GITHUB_OUTPUT}"
+          echo "program-key=${program_key}" >> "${GITHUB_OUTPUT}"
+          echo "authority-key=${authority_key}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install SBF toolchain
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://release.anza.xyz/${ANZA_VERSION}/install" | sh
+          echo "${HOME}/.local/share/solana/install/active_release/bin" >> "${GITHUB_PATH}"
+
+      - name: Build program ELF
+        id: program
+        env:
+          PROGRAM_PATH_INPUT: ${{ inputs.program-path }}
+        run: |
+          set -euo pipefail
+
+          program_path="${PROGRAM_PATH_INPUT}"
+          if [[ "${program_path}" != /* ]]; then
+            program_path="${GITHUB_WORKSPACE}/${program_path}"
+          fi
+          test -d "${program_path}" || {
+            echo "Program directory not found: ${program_path}" >&2
+            exit 1
+          }
+          program_path="$(realpath "${program_path}")"
+          manifest="${program_path}/Cargo.toml"
+          test -f "${manifest}" || {
+            echo "Program manifest not found: ${manifest}" >&2
+            exit 1
+          }
+
+          mapfile -t cdylib_targets < <(
+            cargo metadata \
+              --manifest-path "${manifest}" \
+              --no-deps \
+              --format-version 1 |
+              jq -r \
+                --arg manifest "${manifest}" \
+                '.packages[]
+                 | select(.manifest_path == $manifest)
+                 | .targets[]
+                 | select(.kind | index("cdylib"))
+                 | .name'
+          )
+          if [[ "${#cdylib_targets[@]}" -ne 1 ]]; then
+            echo "Expected exactly one cdylib target in ${manifest}, found ${#cdylib_targets[@]}" >&2
+            exit 1
+          fi
+
+          artifact_dir="${RUNNER_TEMP}/arch-kit-deploy/artifacts"
+          mkdir -p "${artifact_dir}"
+          cargo-build-sbf \
+            --manifest-path "${manifest}" \
+            --sbf-out-dir "${artifact_dir}"
+
+          elf_path="${artifact_dir}/${cdylib_targets[0]}.so"
+          test -s "${elf_path}" || {
+            echo "SBF build did not produce ${elf_path}" >&2
+            exit 1
+          }
+          echo "program-path=${program_path}" >> "${GITHUB_OUTPUT}"
+          echo "elf-path=${elf_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Resolve program IDL
+        id: idl
+        env:
+          IDL_PATH_INPUT: ${{ inputs.idl-path }}
+          PROGRAM_PATH: ${{ steps.program.outputs.program-path }}
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${IDL_PATH_INPUT}" ]]; then
+            idl_path="${IDL_PATH_INPUT}"
+            if [[ "${idl_path}" != /* ]]; then
+              idl_path="${GITHUB_WORKSPACE}/${idl_path}"
+            fi
+            test -f "${idl_path}" || {
+              echo "IDL file not found: ${idl_path}" >&2
+              exit 1
+            }
+            idl_path="$(realpath "${idl_path}")"
+          else
+            rustup toolchain install nightly --profile minimal
+            idl_path="${RUNNER_TEMP}/arch-kit-deploy/artifacts/program.json"
+            arch-kit build-idl "${PROGRAM_PATH}" "${idl_path}"
+          fi
+
+          jq -e 'type == "object"' "${idl_path}" >/dev/null
+          test -s "${idl_path}"
+          echo "idl-path=${idl_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Check Arch node health
+        env:
+          RPC_URL: ${{ inputs.rpc-url }}
+          BITCOIN_NETWORK: ${{ inputs.bitcoin-network }}
+        run: arch-kit --rpc-url "${RPC_URL}" --bitcoin-network "${BITCOIN_NETWORK}" health
+
+      - name: Deploy program and IDL
+        env:
+          RPC_URL: ${{ inputs.rpc-url }}
+          BITCOIN_NETWORK: ${{ inputs.bitcoin-network }}
+          FUND_AUTHORITY: ${{ inputs.fund-authority }}
+          IDL_SIZE: ${{ inputs.idl-size }}
+          ELF_PATH: ${{ steps.program.outputs.elf-path }}
+          IDL_PATH: ${{ steps.idl.outputs.idl-path }}
+          PROGRAM_KEY_PATH: ${{ steps.keys.outputs.program-key }}
+          AUTHORITY_KEY_PATH: ${{ steps.keys.outputs.authority-key }}
+        run: |
+          set -euo pipefail
+
+          args=(
+            --rpc-url "${RPC_URL}"
+            --bitcoin-network "${BITCOIN_NETWORK}"
+            deploy
+            --elf "${ELF_PATH}"
+            --idl "${IDL_PATH}"
+            --program-key "${PROGRAM_KEY_PATH}"
+            --authority "${AUTHORITY_KEY_PATH}"
+          )
+          if [[ "${FUND_AUTHORITY}" == "true" ]]; then
+            args+=(--fund-authority)
+          fi
+          if (( IDL_SIZE > 0 )); then
+            args+=(--idl-size "${IDL_SIZE}")
+          fi
+          arch-kit "${args[@]}"
+
+      - name: Remove deployment keys
+        if: ${{ always() }}
+        run: |
+          key_dir="${RUNNER_TEMP}/arch-kit-deploy/keys"
+          rm -f \
+            "${key_dir}/program.key" \
+            "${key_dir}/authority.key"
