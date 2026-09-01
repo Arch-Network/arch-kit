@@ -12,13 +12,9 @@ pub(crate) struct Args {
     /// Token account as a Base58 or hexadecimal Arch public key.
     #[arg(value_name = "ADDRESS")]
     pub(crate) address: String,
-
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    pub(crate) json: bool,
 }
 
-pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
+pub(crate) fn run(config: &Config, args: Args, json: bool) -> Result<()> {
     let address = parse_pubkey(&args.address, "token account")?;
     let view = read_token_account(&ArchRpcClient::new(config), address)?;
     let account = view.state;
@@ -28,7 +24,7 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
     let close_authority = optional_pubkey(account.close_authority);
     let native_reserve = optional_u64(account.is_native);
 
-    if args.json {
+    if json {
         println!(
             "{}",
             serde_json::to_string_pretty(&json!({
@@ -77,10 +73,10 @@ mod tests {
     #[test]
     fn accepts_an_account_address() {
         let cli = Cli::try_parse_from(["arch-kit", "token-account", "account"]).unwrap();
+        assert!(!cli.json);
         let Command::TokenAccount(args) = cli.command else {
             panic!("expected token-account command");
         };
         assert_eq!(args.address, "account");
-        assert!(!args.json);
     }
 }

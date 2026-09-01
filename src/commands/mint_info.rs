@@ -12,13 +12,9 @@ pub(crate) struct Args {
     /// Token mint as a Base58 or hexadecimal Arch public key.
     #[arg(value_name = "MINT")]
     pub(crate) mint: String,
-
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    pub(crate) json: bool,
 }
 
-pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
+pub(crate) fn run(config: &Config, args: Args, json: bool) -> Result<()> {
     let address = parse_pubkey(&args.mint, "mint")?;
     let mint = read_mint(&ArchRpcClient::new(config), address)?;
     let state = mint.state;
@@ -26,7 +22,7 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
     let mint_authority = optional_pubkey(state.mint_authority);
     let freeze_authority = optional_pubkey(state.freeze_authority);
 
-    if args.json {
+    if json {
         println!(
             "{}",
             serde_json::to_string_pretty(&json!({
@@ -66,10 +62,10 @@ mod tests {
     #[test]
     fn accepts_a_mint_address() {
         let cli = Cli::try_parse_from(["arch-kit", "mint-info", "mint"]).unwrap();
+        assert!(!cli.json);
         let Command::MintInfo(args) = cli.command else {
             panic!("expected mint-info command");
         };
         assert_eq!(args.mint, "mint");
-        assert!(!args.json);
     }
 }

@@ -33,6 +33,10 @@ pub(crate) struct Cli {
     )]
     pub(crate) bitcoin_network: BitcoinNetwork,
 
+    /// Emit machine-readable JSON.
+    #[arg(long, global = true)]
+    pub(crate) json: bool,
+
     #[command(subcommand)]
     pub(crate) command: Command,
 }
@@ -92,4 +96,20 @@ pub(crate) enum Command {
 
     /// Check whether the configured Arch node is ready and its chain is progressing.
     Health,
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::Cli;
+
+    #[test]
+    fn accepts_json_before_or_after_the_subcommand() {
+        let before = Cli::try_parse_from(["arch-kit", "--json", "health"]).unwrap();
+        let after = Cli::try_parse_from(["arch-kit", "health", "--json"]).unwrap();
+
+        assert!(before.json);
+        assert!(after.json);
+    }
 }

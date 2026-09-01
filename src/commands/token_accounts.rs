@@ -12,17 +12,13 @@ pub(crate) struct Args {
     /// Token account owner as a Base58 or hexadecimal Arch public key.
     #[arg(value_name = "OWNER")]
     pub(crate) owner: String,
-
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    pub(crate) json: bool,
 }
 
-pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
+pub(crate) fn run(config: &Config, args: Args, json: bool) -> Result<()> {
     let owner = parse_pubkey(&args.owner, "owner")?;
     let accounts = list_token_accounts(config, owner)?;
 
-    if args.json {
+    if json {
         let accounts = accounts
             .iter()
             .map(|view| {
@@ -82,10 +78,10 @@ mod tests {
     #[test]
     fn parses_owner_and_json_flag() {
         let cli = Cli::try_parse_from(["arch-kit", "token-accounts", "owner", "--json"]).unwrap();
+        assert!(cli.json);
         let Command::TokenAccounts(args) = cli.command else {
             panic!("expected token-accounts command");
         };
         assert_eq!(args.owner, "owner");
-        assert!(args.json);
     }
 }

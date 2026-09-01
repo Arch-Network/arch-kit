@@ -10,20 +10,16 @@ pub(crate) struct Args {
     /// Account as a Base58 or hexadecimal Arch public key.
     #[arg(value_name = "ACCOUNT")]
     pub(crate) account: String,
-
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    pub(crate) json: bool,
 }
 
-pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
+pub(crate) fn run(config: &Config, args: Args, json: bool) -> Result<()> {
     let account = parse_pubkey(&args.account, "account")?;
     let lamports = ArchRpcClient::new(config)
         .read_account_info(account)?
         .lamports;
     let amount = format_amount(lamports, ARCH_DECIMALS);
 
-    if args.json {
+    if json {
         println!(
             "{}",
             serde_json::to_string_pretty(&json!({
@@ -50,11 +46,11 @@ mod tests {
     #[test]
     fn parses_account_and_json_output() {
         let cli = Cli::try_parse_from(["arch-kit", "arch-balance", "account", "--json"]).unwrap();
+        assert!(cli.json);
         let Command::ArchBalance(args) = cli.command else {
             panic!("expected arch-balance command");
         };
         assert_eq!(args.account, "account");
-        assert!(args.json);
     }
 
     #[test]

@@ -28,6 +28,7 @@ fn run() -> Result<()> {
     let Cli {
         rpc_url,
         bitcoin_network,
+        json,
         command,
     } = Cli::parse();
 
@@ -38,16 +39,16 @@ fn run() -> Result<()> {
         Command::Pubkey(args) => commands::pubkey::run(args),
         Command::Ata(args) => commands::ata::run(args),
         Command::TokenBalance(args) => {
-            commands::token_balance::run(&network::config(rpc_url, bitcoin_network)?, args)
+            commands::token_balance::run(&network::config(rpc_url, bitcoin_network)?, args, json)
         }
         Command::TokenAccount(args) => {
-            commands::token_account::run(&network::config(rpc_url, bitcoin_network)?, args)
+            commands::token_account::run(&network::config(rpc_url, bitcoin_network)?, args, json)
         }
         Command::TokenAccounts(args) => {
-            commands::token_accounts::run(&network::config(rpc_url, bitcoin_network)?, args)
+            commands::token_accounts::run(&network::config(rpc_url, bitcoin_network)?, args, json)
         }
         Command::MintInfo(args) => {
-            commands::mint_info::run(&network::config(rpc_url, bitcoin_network)?, args)
+            commands::mint_info::run(&network::config(rpc_url, bitcoin_network)?, args, json)
         }
         Command::CreateMint(args) => {
             commands::create_mint::run(&network::config(rpc_url, bitcoin_network)?, args)
@@ -66,7 +67,7 @@ fn run() -> Result<()> {
             commands::transfer_arch::run(&network::config(rpc_url, bitcoin_network)?, args)
         }
         Command::ArchBalance(args) => {
-            commands::arch_balance::run(&network::config(rpc_url, bitcoin_network)?, args)
+            commands::arch_balance::run(&network::config(rpc_url, bitcoin_network)?, args, json)
         }
         Command::Faucet(args) => {
             commands::faucet::run(&network::config(rpc_url, bitcoin_network)?, args)

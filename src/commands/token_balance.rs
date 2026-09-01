@@ -16,13 +16,9 @@ pub(crate) struct Args {
     /// Token mint as a Base58 or hexadecimal Arch public key.
     #[arg(value_name = "MINT")]
     pub(crate) mint: String,
-
-    /// Emit machine-readable JSON.
-    #[arg(long)]
-    pub(crate) json: bool,
 }
 
-pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
+pub(crate) fn run(config: &Config, args: Args, json: bool) -> Result<()> {
     let owner = parse_pubkey(&args.owner, "owner")?;
     let mint_address = parse_pubkey(&args.mint, "mint")?;
     let (address, mint, account) =
@@ -30,7 +26,7 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
     let amount = account.map_or(0, |account| account.amount);
     let display_amount = format_amount(amount, mint.state.decimals);
 
-    if args.json {
+    if json {
         println!(
             "{}",
             serde_json::to_string_pretty(&json!({
@@ -65,9 +61,11 @@ mod tests {
     fn parses_json_output_flag() {
         let cli =
             Cli::try_parse_from(["arch-kit", "token-balance", "owner", "mint", "--json"]).unwrap();
+        assert!(cli.json);
         let Command::TokenBalance(args) = cli.command else {
             panic!("expected token-balance command");
         };
-        assert!(args.json);
+        assert_eq!(args.owner, "owner");
+        assert_eq!(args.mint, "mint");
     }
 }
