@@ -7,6 +7,11 @@ on:
         description: Program directory containing Cargo.toml
         required: true
         type: string
+      cargo-features:
+        description: Optional Cargo features to enable when building the program
+        required: false
+        default: ""
+        type: string
       idl-path:
         description: Optional ready IDL JSON path; generated when omitted
         required: false
@@ -117,6 +122,7 @@ jobs:
         id: program
         env:
           PROGRAM_PATH_INPUT: ${{ inputs.program-path }}
+          CARGO_FEATURES_INPUT: ${{ inputs.cargo-features }}
         run: |
           set -euo pipefail
 
@@ -155,9 +161,14 @@ jobs:
 
           artifact_dir="${RUNNER_TEMP}/arch-kit-deploy/artifacts"
           mkdir -p "${artifact_dir}"
-          cargo-build-sbf \
-            --manifest-path "${manifest}" \
+          build_args=(
+            --manifest-path "${manifest}"
             --sbf-out-dir "${artifact_dir}"
+          )
+          if [[ -n "${CARGO_FEATURES_INPUT}" ]]; then
+            build_args+=(-- --features "${CARGO_FEATURES_INPUT}")
+          fi
+          cargo-build-sbf "${build_args[@]}"
 
           elf_path="${artifact_dir}/${cdylib_targets[0]}.so"
           test -s "${elf_path}" || {
