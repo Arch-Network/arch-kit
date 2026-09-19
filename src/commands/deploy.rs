@@ -1,9 +1,15 @@
 use std::path::{Path, PathBuf};
 
 use arch_sdk::{
-    Config,
+    ArchError, Config, Status,
+    arch_program::{
+        bpf_loader::BPF_LOADER_ID, pubkey::Pubkey, sanitized::ArchMessage, system_instruction,
+        system_program,
+    },
     blocking::{ArchRpcClient, ProgramDeployer},
+    build_and_sign_transaction,
 };
+use bitcoin::key::Keypair;
 
 use crate::{
     error::{CliError, Result},
@@ -110,6 +116,7 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
         .to_string();
 
     println!("Deploying ELF: {}", args.elf.display());
+    prepare_program_account(config, program_keypair, authority_keypair)?;
     let deployed_program = ProgramDeployer::new(config).try_deploy_program(
         program_name,
         program_keypair,
@@ -145,6 +152,75 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
     Ok(())
 }
 
+// SDK 0.10.0 skips account creation whenever the program account exists, even
+// when it is an empty System account created by an earlier funding transfer.
+fn prepare_program_account(
+    config: &Config,
+    program_keypair: Keypair,
+    authority_keypair: Keypair,
+) -> Result<()> {
+    let program = Pubkey::from_slice(&program_keypair.x_only_public_key().0.serialize());
+    let authority = Pubkey::from_slice(&authority_keypair.x_only_public_key().0.serialize());
+    if program == authority {
+        return Err(CliError::InvalidArgument(
+            "program and deployment authority must use different keys".to_string(),
+        ));
+    }
+
+    let client = ArchRpcClient::new(config);
+    let account = match client.read_account_info(program) {
+        Ok(account) => account,
+        Err(ArchError::NotFound(_)) => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    if account.owner == BPF_LOADER_ID {
+        return Ok(());
+    }
+    if account.owner != system_program::SYSTEM_PROGRAM_ID
+        || !account.data.is_empty()
+        || account.is_executable
+    {
+        return Err(CliError::InvalidArgument(format!(
+            "program account {program} must be loader-owned or an empty, non-executable System account; owner={}, data_len={}, executable={}",
+            account.owner,
+            account.data.len(),
+            account.is_executable,
+        )));
+    }
+
+    println!("Assigning existing program account {program} to the BPF loader...");
+    let message = ArchMessage::new(
+        &[system_instruction::assign(&program, &BPF_LOADER_ID)],
+        Some(authority),
+        client.get_best_finalized_block_hash()?,
+    );
+    let transaction = build_and_sign_transaction(
+        message,
+        vec![authority_keypair, program_keypair],
+        config.network,
+    )?;
+    let txid = client.send_transaction(transaction)?;
+    let processed = client.wait_for_processed_transaction(&txid)?;
+    if processed.status != Status::Processed || !processed.rollback_status.is_applied() {
+        return Err(CliError::TransactionFailed {
+            action: format!("program account assignment ({txid})"),
+            status: format!(
+                "{:?}, rollback={:?}",
+                processed.status, processed.rollback_status
+            ),
+        });
+    }
+    let assigned = client.read_account_info(program)?;
+    if assigned.owner != BPF_LOADER_ID {
+        return Err(CliError::InvalidArgument(format!(
+            "program account {program} still has owner {} after assignment {txid}; expected {BPF_LOADER_ID}",
+            assigned.owner,
+        )));
+    }
+    println!("Program account assigned to the BPF loader: {txid}");
+    Ok(())
+}
+
 fn ensure_file(path: &Path, label: &'static str) -> Result<()> {
     if path.is_file() {
         Ok(())
@@ -164,6 +240,10 @@ fn path_string(path: &Path, label: &'static str) -> Result<String> {
             path: PathBuf::from(path),
         })
 }
+
+#[cfg(test)]
+#[path = "deploy_tests.rs"]
+mod deployment_tests;
 
 #[cfg(test)]
 mod tests {
