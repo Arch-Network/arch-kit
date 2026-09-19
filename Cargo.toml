@@ -1,6 +1,6 @@
 [package]
 name = "arch-kit"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2024"
 rust-version = "1.85"
 description = "Command-line toolkit for developing, deploying, and interacting with Arch Network programs"
