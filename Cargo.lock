@@ -75,9 +75,9 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "apl-associated-token-account"
-version = "0.8.5"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afcfcf3505aa60fdc3d63465f8d3a9f268e38b2566fa6bb26ee69b59728c5578"
+checksum = "ebf329a037532f8a68c97a22b744c12f69b4a4047a856a98d2bac1791df091ae"
 dependencies = [
  "apl-token",
  "arch_program",
@@ -94,9 +94,9 @@ dependencies = [
 
 [[package]]
 name = "apl-token"
-version = "0.8.5"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd8f96beb256b1db4cfc62ce28bba8961e667b1b6f025ce4c1e41f092b79faa5"
+checksum = "1d8e571efc56872aa86207318e8815094a99c66e2c918563dd211e713904e75a"
 dependencies = [
  "arch_program",
  "arrayref",
@@ -208,9 +208,9 @@ dependencies = [
 
 [[package]]
 name = "arch_program"
-version = "0.8.7"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73152bac685d5393c467a9eb8eb61aac721a2360d149926503dc4e5d4511e14e"
+checksum = "ddd4e72bc998026212305285fc192aec473bcc03c4a90ae1bc7c4053c35d615d"
 dependencies = [
  "arch-titan-types-core",
  "base64 0.22.1",
@@ -241,9 +241,9 @@ dependencies = [
 
 [[package]]
 name = "arch_sdk"
-version = "0.8.5"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1558aa657556a8bda3cb80f63bcd1ebec5d060c6b5b68131756f5df2abf3e7e4"
+checksum = "85bbb906f2bf8f7c9e79314e11fce31f42feeef4316d66dbf56116dd787a4b70"
 dependencies = [
  "arch-titan-client",
  "arch_program",
