@@ -40,7 +40,7 @@ with the reusable workflow:
 ```yaml
 jobs:
   deploy:
-    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.0
+    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.4
     with:
       program-path: program
       bitcoin-network: testnet
@@ -65,6 +65,16 @@ The workflow builds the SBF ELF, checks node health, and deploys or upgrades
 the program and canonical IDL. Faucet funding is disabled unless explicitly
 enabled. Reusing the same two key secrets updates the existing deployment;
 changing the program key creates a new deployment.
+
+Set `expect-program-id` to the intended program ID (Base58 or 64-character hex)
+to check that `PROGRAM_KEY` derives that ID before faucet funding or deployment.
+It defaults to an empty string, which skips this check.
+
+Set `allow-idl-resize: true` to opt into growing an existing populated canonical
+IDL when the new IDL no longer fits, or to reserve more space with `idl-size`.
+The input defaults to `false`, preserving the existing fixed-capacity behavior.
+Growth also supports Satellite 0.31.5/0.31.6 handlers: the CLI backs up the IDL,
+then clears, grows, and restores it within each resize transaction.
 
 ## Program development
 
@@ -350,17 +360,30 @@ byte array.
 
 Useful deployment options:
 
+- `--expect-program-id <PUBKEY>` checks that `--program-key` derives the expected
+  program ID before faucet funding or deployment. Accepts Base58 or 64-character
+  hex; omitted by default.
 - `--generate-if-missing` securely creates missing program or authority keys.
 - `--fund-authority` requests faucet funding before deployment; it is rejected
   on mainnet.
 - `--idl <PATH>` publishes or upgrades an IDL after deployment.
-- `--idl-size <BYTES>` sets the initial IDL account size and requires `--idl`.
+- `--idl-size <BYTES>` sets the minimum IDL account size and requires `--idl`.
+  Growing a populated account also requires `--allow-idl-resize`.
+- `--allow-idl-resize` opts into growing a populated canonical IDL and requires
+  `--idl`. It is disabled by default.
 
 IDL accounts default to at least 10,000 bytes, including the 44-byte header.
-Reserve enough capacity for future upgrades because a populated IDL account
-cannot be grown. The target program must include compatible canonical Satellite
-IDL handlers. If IDL publication fails, the deployed program remains deployed
-and its program ID is included in the error.
+Populated accounts retain their capacity unless `--allow-idl-resize` is supplied.
+With the flag, growth accommodates the new compressed IDL and any larger
+`--idl-size`, including when the IDL contents are unchanged. Accounts are never
+shrunk. The target program must include canonical Satellite IDL handlers.
+For compatibility with older handlers, the CLI copies the current IDL into a
+backup buffer, verifies the copy, then clears, grows, and restores the canonical
+IDL within each resize transaction. A failed transaction leaves the published
+IDL intact. The temporary resize buffers are closed after the final growth
+step, returning their rent to the authority. The CLI verifies the restored IDL
+before publishing an update. If IDL publication fails, the deployed program
+remains deployed and its program ID is included in the error.
 
 ## Publishing arch-kit
 

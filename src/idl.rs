@@ -34,6 +34,7 @@ const TAG_CREATE: u8 = 0;
 const TAG_CREATE_BUFFER: u8 = 1;
 const TAG_WRITE: u8 = 2;
 const TAG_SET_BUFFER: u8 = 3;
+const TAG_CLOSE: u8 = 5;
 const TAG_RESIZE: u8 = 6;
 
 #[derive(Debug)]
@@ -118,6 +119,7 @@ pub(crate) fn publish(
     authority: Pubkey,
     authority_keypair: Keypair,
     prepared: PreparedIdl,
+    allow_resize: bool,
 ) -> Result<()> {
     let client = ArchRpcClient::new(config);
     let (_, idl_address) = derive_idl_addresses(&program)?;
@@ -134,13 +136,13 @@ pub(crate) fn publish(
     let outcome = match client.read_account_info(idl_address) {
         Ok(existing) => upgrade_or_skip(
             &client,
-            config,
             program,
             idl_address,
             authority,
             authority_keypair,
             existing,
             &prepared,
+            allow_resize,
         )?,
         Err(ArchError::NotFound(_)) => {
             initialize(
@@ -217,7 +219,7 @@ fn initialize(
         vec![authority_keypair],
     )?;
 
-    grow_empty_account(
+    grow_account(
         client,
         program,
         idl_address,
@@ -225,6 +227,7 @@ fn initialize(
         authority_keypair,
         prepared.initial_capacity.min(IDL_RESIZE_INCREMENT),
         prepared.initial_capacity,
+        None,
     )?;
     write_chunks(
         client,
@@ -239,44 +242,128 @@ fn initialize(
 #[allow(clippy::too_many_arguments)]
 fn upgrade_or_skip(
     client: &ArchRpcClient,
-    config: &Config,
     program: Pubkey,
     idl_address: Pubkey,
     authority: Pubkey,
     authority_keypair: Keypair,
     existing: AccountInfo,
     prepared: &PreparedIdl,
+    allow_resize: bool,
 ) -> Result<PublishOutcome> {
     let payload_range = validate_idl_account(&existing, program, Some(authority))?;
-    let capacity = existing.data.len();
+    let mut capacity = existing.data.len();
 
     if let Some(requested) = prepared.requested_capacity
         && requested > capacity
+        && !allow_resize
     {
         return Err(CliError::Idl(format!(
-            "--idl-size requests {requested} bytes, but the populated canonical IDL account has fixed capacity {capacity}; publish initially with a larger size"
+            "--idl-size requests {requested} bytes, but the populated canonical IDL account has fixed capacity {capacity}; use --allow-idl-resize to opt into clearing, growing, and republishing it"
         )));
     }
 
     let existing_json = decompress_json(&existing.data[payload_range])?;
-    if existing_json == prepared.expected {
-        return Ok(PublishOutcome::Unchanged { capacity });
-    }
-
+    let unchanged = existing_json == prepared.expected;
     let required = required_space(prepared.compressed.len())?;
-    if required > capacity {
+    if !unchanged && required > capacity && !allow_resize {
         return Err(CliError::Idl(format!(
-            "new compressed IDL requires {required} account bytes, but the populated canonical IDL account has fixed capacity {capacity}; redeploy the IDL account with a larger --idl-size"
+            "new compressed IDL requires {required} account bytes, but the populated canonical IDL account has fixed capacity {capacity}; use --allow-idl-resize to opt into clearing, growing, and republishing it"
         )));
     }
 
-    let (buffer_keypair, buffer, _) = generate_new_keypair(config.network);
-    println!("  Upgrade buffer: {buffer}");
+    // An unchanged IDL only needs growth when explicitly requested by --idl-size.
+    let target_capacity = capacity
+        .max(prepared.requested_capacity.unwrap_or(0))
+        .max(if unchanged { 0 } else { required });
+    if target_capacity > capacity {
+        println!("  Growing canonical IDL from {capacity} to {target_capacity} bytes...");
+        let buffers = prepare_resize_buffers(
+            client,
+            program,
+            idl_address,
+            authority,
+            authority_keypair,
+            &existing,
+        )?;
+        grow_account(
+            client,
+            program,
+            idl_address,
+            authority,
+            authority_keypair,
+            capacity,
+            target_capacity,
+            Some(buffers),
+        )?;
+
+        let resized = client.read_account_info(idl_address)?;
+        let payload_range = validate_idl_account(&resized, program, Some(authority))?;
+        capacity = resized.data.len();
+        if capacity < target_capacity {
+            return Err(CliError::Idl(format!(
+                "canonical IDL account has {capacity} bytes after resize; expected at least {target_capacity}"
+            )));
+        }
+        if decompress_json(&resized.data[payload_range])? != existing_json {
+            return Err(CliError::Idl(
+                "canonical IDL contents changed during resize".to_string(),
+            ));
+        }
+        if unchanged {
+            return Ok(PublishOutcome::Upgraded { capacity });
+        }
+    }
+    if unchanged {
+        return Ok(PublishOutcome::Unchanged { capacity });
+    }
+
+    let buffer = create_buffer(
+        client,
+        program,
+        authority,
+        authority_keypair,
+        required,
+        None,
+    )?;
+    write_chunks(
+        client,
+        program,
+        buffer,
+        authority,
+        authority_keypair,
+        &prepared.compressed,
+    )?;
+    send(
+        client,
+        "IDL set upgrade buffer",
+        vec![set_buffer_instruction(
+            program,
+            buffer,
+            idl_address,
+            authority,
+        )],
+        authority,
+        vec![authority_keypair],
+    )?;
+
+    Ok(PublishOutcome::Upgraded { capacity })
+}
+
+fn create_buffer(
+    client: &ArchRpcClient,
+    program: Pubkey,
+    authority: Pubkey,
+    authority_keypair: Keypair,
+    capacity: usize,
+    copy_from: Option<Pubkey>,
+) -> Result<Pubkey> {
+    let (buffer_keypair, buffer, _) = generate_new_keypair(client.config.network);
+    println!("  IDL buffer: {buffer}");
     let create_account = system_instruction::create_account(
         &authority,
         &buffer,
-        minimum_rent(required),
-        to_u64(required, "IDL buffer size")?,
+        minimum_rent(capacity),
+        to_u64(capacity, "IDL buffer size")?,
         &program,
     );
     let create_buffer = Instruction {
@@ -287,44 +374,88 @@ fn upgrade_or_skip(
         ],
         data: unit_ix_data(TAG_CREATE_BUFFER),
     };
+    let mut instructions = vec![create_account, create_buffer];
+    if let Some(source) = copy_from {
+        instructions.push(set_buffer_instruction(program, source, buffer, authority));
+    }
     send(
         client,
-        "IDL create upgrade buffer",
-        vec![create_account, create_buffer],
+        "IDL create buffer",
+        instructions,
         authority,
         vec![authority_keypair, buffer_keypair],
     )?;
+    Ok(buffer)
+}
 
-    write_chunks(
+fn prepare_resize_buffers(
+    client: &ArchRpcClient,
+    program: Pubkey,
+    idl_address: Pubkey,
+    authority: Pubkey,
+    authority_keypair: Keypair,
+    existing: &AccountInfo,
+) -> Result<(Pubkey, Pubkey)> {
+    let range = validate_idl_account(existing, program, Some(authority))?;
+    // SetBuffer can copy between any two IDL accounts with the same authority.
+    // Snapshot the canonical IDL on-chain before temporarily clearing it.
+    let backup = create_buffer(
         client,
         program,
-        buffer,
         authority,
         authority_keypair,
-        &prepared.compressed,
+        range.end,
+        Some(idl_address),
     )?;
-    let set_buffer = Instruction {
+    let saved = client.read_account_info(backup)?;
+    let saved_range = validate_idl_account(&saved, program, Some(authority))?;
+    if saved.data[saved_range] != existing.data[range] {
+        return Err(CliError::Idl(
+            "IDL resize backup differs from the existing canonical IDL".to_string(),
+        ));
+    }
+    let empty = create_buffer(
+        client,
+        program,
+        authority,
+        authority_keypair,
+        IDL_HEADER_LEN,
+        None,
+    )?;
+    Ok((empty, backup))
+}
+
+fn set_buffer_instruction(
+    program: Pubkey,
+    buffer: Pubkey,
+    target: Pubkey,
+    authority: Pubkey,
+) -> Instruction {
+    Instruction {
         program_id: program,
         accounts: vec![
             AccountMeta::new(buffer, false),
-            AccountMeta::new(idl_address, false),
+            AccountMeta::new(target, false),
             AccountMeta::new_readonly(authority, true),
         ],
         data: unit_ix_data(TAG_SET_BUFFER),
-    };
-    send(
-        client,
-        "IDL set upgrade buffer",
-        vec![set_buffer],
-        authority,
-        vec![authority_keypair],
-    )?;
+    }
+}
 
-    Ok(PublishOutcome::Upgraded { capacity })
+fn close_buffer_instruction(program: Pubkey, buffer: Pubkey, authority: Pubkey) -> Instruction {
+    Instruction {
+        program_id: program,
+        accounts: vec![
+            AccountMeta::new(buffer, false),
+            AccountMeta::new_readonly(authority, true),
+            AccountMeta::new(authority, false),
+        ],
+        data: unit_ix_data(TAG_CLOSE),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
-fn grow_empty_account(
+fn grow_account(
     client: &ArchRpcClient,
     program: Pubkey,
     idl_address: Pubkey,
@@ -332,6 +463,7 @@ fn grow_empty_account(
     authority_keypair: Keypair,
     initial_space: usize,
     target_space: usize,
+    buffers: Option<(Pubkey, Pubkey)>,
 ) -> Result<()> {
     let mut current_space = initial_space;
     while current_space < target_space {
@@ -347,10 +479,29 @@ fn grow_empty_account(
         let next_space = current_space
             .checked_add((target_space - current_space).min(IDL_RESIZE_INCREMENT))
             .ok_or_else(|| CliError::InvalidIdl("IDL resize overflow".to_string()))?;
+        let instructions = if let Some((empty, backup)) = buffers {
+            // Legacy Satellite handlers only resize empty IDLs. Restore the
+            // snapshot in the same transaction so every committed state has
+            // the original IDL, even if a later resize or upload fails.
+            let mut instructions = vec![
+                set_buffer_instruction(program, empty, idl_address, authority),
+                resize,
+                set_buffer_instruction(program, backup, idl_address, authority),
+            ];
+            if next_space == target_space {
+                instructions.extend([
+                    close_buffer_instruction(program, empty, authority),
+                    close_buffer_instruction(program, backup, authority),
+                ]);
+            }
+            instructions
+        } else {
+            vec![resize]
+        };
         send(
             client,
             format!("IDL resize {next_space}/{target_space}"),
-            vec![resize],
+            instructions,
             authority,
             vec![authority_keypair],
         )?;
@@ -405,10 +556,13 @@ fn send(
     let transaction = build_and_sign_transaction(message, signers, client.config.network)?;
     let transaction_id = client.send_transaction(transaction)?;
     let processed = client.wait_for_processed_transaction(&transaction_id)?;
-    if processed.status != Status::Processed {
+    if processed.status != Status::Processed || !processed.rollback_status.is_applied() {
         return Err(CliError::TransactionFailed {
             action,
-            status: format!("{:?}", processed.status),
+            status: format!(
+                "{:?}, rollback={:?}",
+                processed.status, processed.rollback_status
+            ),
         });
     }
     println!("  {action}: {transaction_id}");
@@ -551,6 +705,10 @@ fn unit_ix_data(tag: u8) -> Vec<u8> {
     data.push(tag);
     data
 }
+
+#[cfg(test)]
+#[path = "idl_tests.rs"]
+mod publication_tests;
 
 #[cfg(test)]
 mod tests {

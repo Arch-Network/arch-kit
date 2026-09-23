@@ -15,6 +15,7 @@ use crate::{
     error::{CliError, Result},
     idl,
     keys::{load_or_generate_key, pubkey_hex},
+    token::parse_pubkey,
 };
 
 #[derive(Debug, clap::Args)]
@@ -26,6 +27,10 @@ pub(crate) struct Args {
     /// Existing program identity keypair.
     #[arg(long, value_name = "PATH")]
     pub(crate) program_key: PathBuf,
+
+    /// Require --program-key to derive this program ID (Base58 or 64-character hex).
+    #[arg(long, value_name = "PUBKEY")]
+    pub(crate) expect_program_id: Option<String>,
 
     /// Existing deployment and IDL authority keypair.
     #[arg(long, value_name = "PATH")]
@@ -43,12 +48,23 @@ pub(crate) struct Args {
     #[arg(long, value_name = "PATH")]
     pub(crate) idl: Option<PathBuf>,
 
-    /// Minimum initial canonical IDL account size in bytes, including its 44-byte header.
+    /// Minimum canonical IDL account size in bytes, including its 44-byte header.
+    /// Growing a populated account also requires --allow-idl-resize.
     #[arg(long, requires = "idl", value_name = "BYTES")]
     pub(crate) idl_size: Option<usize>,
+
+    /// Allow clearing, growing, and republishing a populated canonical IDL.
+    #[arg(long, requires = "idl")]
+    pub(crate) allow_idl_resize: bool,
 }
 
 pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
+    let expected_program = args
+        .expect_program_id
+        .as_deref()
+        .map(|value| parse_pubkey(value, "--expect-program-id"))
+        .transpose()?;
+
     ensure_file(&args.elf, "program ELF")?;
     // Read now so invalid permissions or I/O fail before optional faucet use.
     std::fs::read(&args.elf).map_err(|source| CliError::ReadInput {
@@ -63,6 +79,13 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
         config.network,
         args.generate_if_missing,
     )?;
+    if let Some(expected) = expected_program
+        && expected != program_pubkey
+    {
+        return Err(CliError::InvalidArgument(format!(
+            "program ID mismatch: expected {expected} from --expect-program-id, but --program-key derives {program_pubkey}"
+        )));
+    }
     let (authority_keypair, authority_pubkey, generated_authority_key) = load_or_generate_key(
         &args.authority,
         "authority key",
@@ -140,6 +163,7 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
             authority_pubkey,
             authority_keypair,
             prepared,
+            args.allow_idl_resize,
         )
     {
         return Err(CliError::IdlAfterDeployment {
@@ -273,6 +297,9 @@ mod tests {
             "program.idl.json",
             "--idl-size",
             "20000",
+            "--allow-idl-resize",
+            "--expect-program-id",
+            "1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f",
         ])
         .unwrap();
 
@@ -282,6 +309,11 @@ mod tests {
         assert!(args.fund_authority);
         assert!(!args.generate_if_missing);
         assert_eq!(args.idl_size, Some(20_000));
+        assert!(args.allow_idl_resize);
+        assert_eq!(
+            args.expect_program_id.as_deref(),
+            Some("1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f")
+        );
         assert_eq!(args.idl, Some(PathBuf::from("program.idl.json")));
     }
 
@@ -298,6 +330,46 @@ mod tests {
             "authority.json",
             "--idl-size",
             "10000",
+        ]);
+
+        assert!(parsed.is_err());
+    }
+
+    #[test]
+    fn idl_resize_defaults_to_false() {
+        let cli = Cli::try_parse_from([
+            "arch-kit",
+            "deploy",
+            "--elf",
+            "program.so",
+            "--program-key",
+            "program.json",
+            "--authority",
+            "authority.json",
+            "--idl",
+            "program.idl.json",
+        ])
+        .unwrap();
+
+        let Command::Deploy(args) = cli.command else {
+            panic!("expected deploy command");
+        };
+        assert!(!args.allow_idl_resize);
+        assert!(args.expect_program_id.is_none());
+    }
+
+    #[test]
+    fn rejects_idl_resize_without_idl() {
+        let parsed = Cli::try_parse_from([
+            "arch-kit",
+            "deploy",
+            "--elf",
+            "program.so",
+            "--program-key",
+            "program.json",
+            "--authority",
+            "authority.json",
+            "--allow-idl-resize",
         ]);
 
         assert!(parsed.is_err());
