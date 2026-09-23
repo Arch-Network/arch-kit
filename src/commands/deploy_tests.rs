@@ -1,11 +1,4 @@
 //! Account preparation against a local JSON-RPC server; no chain or real keys.
-use std::{
-    io::{BufRead, BufReader, Read, Write},
-    net::TcpListener,
-    thread,
-    time::{Duration, Instant},
-};
-
 use arch_sdk::{AccountInfo, RuntimeTransaction, arch_program::hash::Hash};
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use serde_json::{Value, json};
@@ -51,66 +44,10 @@ fn assignment_replies(status: Value, rollback: Value) -> Vec<(&'static str, Valu
     ]
 }
 
-// A finite response script makes extra RPC calls or uploads fail the test.
 fn run_rpc(replies: Vec<(&'static str, Value)>) -> (Result<()>, Vec<Value>) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    listener.set_nonblocking(true).unwrap();
-    let endpoint = format!("http://{}", listener.local_addr().unwrap());
-    let server = thread::spawn(move || {
-        let mut requests = Vec::new();
-        let mut submitted = Value::Null;
-        for (method, mut response) in replies {
-            let deadline = Instant::now() + Duration::from_secs(10);
-            let (mut stream, _) = loop {
-                match listener.accept() {
-                    Ok(connection) => break connection,
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        assert!(Instant::now() < deadline, "missing RPC call {method}");
-                        thread::sleep(Duration::from_millis(5));
-                    }
-                    Err(error) => panic!("RPC accept: {error}"),
-                }
-            };
-            stream
-                .set_read_timeout(Some(Duration::from_secs(5)))
-                .unwrap();
-            let mut reader = BufReader::new(stream.try_clone().unwrap());
-            let mut length = 0;
-            loop {
-                let mut line = String::new();
-                assert!(reader.read_line(&mut line).unwrap() > 0);
-                if line == "\r\n" {
-                    break;
-                }
-                if let Some(value) = line.to_ascii_lowercase().strip_prefix("content-length:") {
-                    length = value.trim().parse().unwrap();
-                }
-            }
-            let mut body = vec![0; length];
-            reader.read_exact(&mut body).unwrap();
-            let request: Value = serde_json::from_slice(&body).unwrap();
-            assert_eq!(request["method"], method);
-            if method == "send_transaction" {
-                submitted = request["params"].clone();
-            }
-            if method == "get_processed_transaction" {
-                response["result"]["runtime_transaction"] = submitted.clone();
-            }
-            response["jsonrpc"] = json!("2.0");
-            response["id"] = request["id"].clone();
-            let body = response.to_string();
-            write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
-            requests.push(request);
-        }
-        requests
-    });
-    let config = Config {
-        arch_node_url: endpoint,
-        network: bitcoin::Network::Bitcoin,
-        ..Config::localnet()
-    };
-    let result = prepare_program_account(&config, keypair(1), keypair(2));
-    (result, server.join().unwrap())
+    crate::test_rpc::run(replies, |config| {
+        prepare_program_account(config, keypair(1), keypair(2))
+    })
 }
 
 #[test]
@@ -214,4 +151,87 @@ fn unchanged_owner_after_processed_assignment_stops_deployment() {
 fn program_cannot_also_pay_deployment_fees() {
     let result = prepare_program_account(&Config::localnet(), keypair(1), keypair(1));
     assert!(result.unwrap_err().to_string().contains("different keys"));
+}
+
+fn deployment_args(expect_program_id: Option<String>) -> (tempfile::TempDir, Args) {
+    let directory = tempfile::tempdir().unwrap();
+    let elf = directory.path().join("program.so");
+    let program_key = directory.path().join("program.key");
+    let authority = directory.path().join("authority.key");
+    std::fs::write(&elf, b"test ELF; deployment must not be reached").unwrap();
+    std::fs::write(&program_key, hex::encode(keypair(1).secret_bytes())).unwrap();
+    std::fs::write(&authority, hex::encode(keypair(2).secret_bytes())).unwrap();
+    let args = Args {
+        elf,
+        program_key,
+        expect_program_id,
+        authority,
+        generate_if_missing: false,
+        fund_authority: false,
+        idl: None,
+        idl_size: None,
+        allow_idl_resize: false,
+    };
+    (directory, args)
+}
+
+#[test]
+fn expected_program_id_mismatch_stops_before_authority_setup_or_funding() {
+    let actual = Pubkey::from_slice(&keypair(1).x_only_public_key().0.serialize());
+    let expected = Pubkey::from_slice(&keypair(2).x_only_public_key().0.serialize());
+    for value in [expected.to_string(), pubkey_hex(&expected)] {
+        let (directory, mut args) = deployment_args(Some(value));
+        args.authority = directory.path().join("missing-authority.key");
+        args.generate_if_missing = true;
+        args.fund_authority = true;
+        let authority_path = args.authority.clone();
+        let (result, requests) = crate::test_rpc::run(vec![], |config| run(config, args));
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("program ID mismatch"));
+        assert!(error.contains(&expected.to_string()));
+        assert!(error.contains(&actual.to_string()));
+        assert!(!authority_path.exists());
+        assert!(requests.is_empty());
+    }
+}
+
+#[test]
+fn matching_or_omitted_expected_program_id_reaches_account_preparation() {
+    let program = Pubkey::from_slice(&keypair(1).x_only_public_key().0.serialize());
+    for value in [
+        None,
+        Some(program.to_string()),
+        Some(pubkey_hex(&program)),
+        Some(pubkey_hex(&program).to_uppercase()),
+    ] {
+        let (_directory, args) = deployment_args(value);
+        let (result, requests) = crate::test_rpc::run(
+            vec![(
+                "read_account_info",
+                json!({"error": {"code": -32603, "message": "stop before deployment"}}),
+            )],
+            |config| run(config, args),
+        );
+        assert!(matches!(result, Err(CliError::ArchRpc(_))));
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0]["params"], json!(program));
+    }
+}
+
+#[test]
+fn malformed_expected_program_id_fails_before_loading_files() {
+    for value in [
+        "".to_string(),
+        "not-a-public-key".to_string(),
+        "ab".repeat(31),
+        "ab".repeat(33),
+    ] {
+        let (directory, mut args) = deployment_args(Some(value));
+        args.elf = directory.path().join("missing.so");
+        let (result, requests) = crate::test_rpc::run(vec![], |config| run(config, args));
+        let error = result.unwrap_err();
+        assert!(matches!(error, CliError::InvalidArgument(_)));
+        assert!(error.to_string().contains("--expect-program-id"));
+        assert!(requests.is_empty());
+    }
 }

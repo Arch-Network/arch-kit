@@ -7,6 +7,16 @@ on:
         description: Program directory containing Cargo.toml
         required: true
         type: string
+      environment:
+        description: Optional GitHub deployment environment; empty leaves the job without an environment
+        required: false
+        default: ""
+        type: string
+      expect-program-id:
+        description: Optional expected program ID (Base58 or 64-character hex); must match PROGRAM_KEY
+        required: false
+        default: ""
+        type: string
       cargo-features:
         description: Optional Cargo features to enable when building the program
         required: false
@@ -33,10 +43,15 @@ on:
         default: false
         type: boolean
       idl-size:
-        description: Initial IDL account size; zero uses the arch-kit default
+        description: Minimum IDL account size; zero uses the arch-kit default
         required: false
         default: 0
         type: number
+      allow-idl-resize:
+        description: Opt into clearing, growing, and republishing a populated canonical IDL
+        required: false
+        default: false
+        type: boolean
     secrets:
       PROGRAM_KEY:
         description: Program private key as hex or SDK-compatible JSON
@@ -53,7 +68,7 @@ permissions:
   contents: read
 
 env:
-  ARCH_KIT_VERSION: 0.1.3
+  ARCH_KIT_VERSION: 0.1.4
   ANZA_VERSION: v3.1.9
   CARGO_TERM_COLOR: always
 
@@ -61,6 +76,7 @@ jobs:
   deploy:
     name: Build and Deploy
     runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
     outputs:
       program-id: ${{ steps.keys.outputs.program-id }}
 
@@ -218,6 +234,8 @@ jobs:
           BITCOIN_NETWORK: ${{ inputs.bitcoin-network }}
           FUND_AUTHORITY: ${{ inputs.fund-authority }}
           IDL_SIZE: ${{ inputs.idl-size }}
+          ALLOW_IDL_RESIZE: ${{ inputs.allow-idl-resize }}
+          EXPECT_PROGRAM_ID: ${{ inputs.expect-program-id }}
           ELF_PATH: ${{ steps.program.outputs.elf-path }}
           IDL_PATH: ${{ steps.idl.outputs.idl-path }}
           PROGRAM_KEY_PATH: ${{ steps.keys.outputs.program-key }}
@@ -239,6 +257,12 @@ jobs:
           fi
           if (( IDL_SIZE > 0 )); then
             args+=(--idl-size "${IDL_SIZE}")
+          fi
+          if [[ "${ALLOW_IDL_RESIZE}" == "true" ]]; then
+            args+=(--allow-idl-resize)
+          fi
+          if [[ -n "${EXPECT_PROGRAM_ID}" ]]; then
+            args+=(--expect-program-id "${EXPECT_PROGRAM_ID}")
           fi
           arch-kit "${args[@]}"
 

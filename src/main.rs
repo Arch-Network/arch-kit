@@ -10,6 +10,9 @@ mod transaction;
 mod utils;
 mod vanity;
 
+#[cfg(test)]
+mod test_rpc;
+
 use clap::Parser;
 
 use crate::{
