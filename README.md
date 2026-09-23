@@ -51,6 +51,19 @@ jobs:
       AUTHORITY_KEY: ${{ secrets.AUTHORITY_KEY }}
 ```
 
+To select a GitHub deployment environment, add `environment` under `with`:
+
+```yaml
+    with:
+      program-path: program
+      environment: production
+```
+
+The input defaults to an empty string, so omitting it runs without an
+environment. When set, the deployment job uses that environment's protection
+rules and secrets. Environment secrets take precedence over caller-provided
+secrets with the same name; see [GitHub's reusable workflow documentation](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#using-inputs-and-secrets-in-a-reusable-workflow).
+
 When `idl-path` is omitted, the workflow builds the Satellite IDL from the
 program. Programs with manually maintained IDLs can bypass that step:
 
