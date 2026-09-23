@@ -55,10 +55,10 @@ on:
     secrets:
       PROGRAM_KEY:
         description: Program private key as hex or SDK-compatible JSON
-        required: true
+        required: false
       AUTHORITY_KEY:
         description: Deployment authority private key as hex or SDK-compatible JSON
-        required: true
+        required: false
     outputs:
       program-id:
         description: Base58 public key of the deployed program
