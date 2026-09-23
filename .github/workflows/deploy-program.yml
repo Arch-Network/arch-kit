@@ -53,12 +53,14 @@ on:
         default: false
         type: boolean
     secrets:
+      # The selected job environment can provide these instead of the caller.
+      # Both values are still required by the runtime checks before staging keys.
       PROGRAM_KEY:
         description: Program private key as hex or SDK-compatible JSON
-        required: true
+        required: false
       AUTHORITY_KEY:
         description: Deployment authority private key as hex or SDK-compatible JSON
-        required: true
+        required: false
     outputs:
       program-id:
         description: Base58 public key of the deployed program
