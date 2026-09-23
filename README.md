@@ -40,7 +40,7 @@ with the reusable workflow:
 ```yaml
 jobs:
   deploy:
-    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.4
+    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.5
     with:
       program-path: program
       bitcoin-network: testnet
