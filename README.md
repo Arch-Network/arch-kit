@@ -377,8 +377,10 @@ Useful deployment options:
   program ID before faucet funding or deployment. Accepts Base58 or 64-character
   hex; omitted by default.
 - `--generate-if-missing` securely creates missing program or authority keys.
-- `--fund-authority` requests faucet funding before deployment; it is rejected
-  on mainnet.
+- `--fund-authority` tops up to an estimated ELF rent and upload-fee budget,
+  reserving one extra faucet grant for optional IDL publication. Existing authority
+  funds count toward the target; unusually large IDLs may need additional funds.
+  It is rejected on mainnet.
 - `--idl <PATH>` publishes or upgrades an IDL after deployment.
 - `--idl-size <BYTES>` sets the minimum IDL account size and requires `--idl`.
   Growing a populated account also requires `--allow-idl-resize`.

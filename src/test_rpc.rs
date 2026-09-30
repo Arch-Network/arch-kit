@@ -54,7 +54,7 @@ pub(crate) fn run<T>(
             if method == "send_transaction" {
                 submitted = request["params"].clone();
             }
-            if method == "get_processed_transaction" {
+            if method == "get_processed_transaction" && !submitted.is_null() {
                 response["result"]["runtime_transaction"] = submitted.clone();
             }
             response["jsonrpc"] = json!("2.0");

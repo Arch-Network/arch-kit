@@ -235,3 +235,71 @@ fn malformed_expected_program_id_fails_before_loading_files() {
         assert!(requests.is_empty());
     }
 }
+
+#[test]
+fn funding_scales_with_elf_size_and_skips_existing_funds() {
+    for (elf_size, starting_balance, with_idl, grants) in [
+        (1_000, 0, false, 1),
+        (1_000_000, 0, false, 8),
+        (1_000_000, 8_000_000, false, 0),
+        (1_000, 0, true, 2),
+    ] {
+        let (directory, mut args) = deployment_args(None);
+        args.fund_authority = true;
+        std::fs::write(&args.elf, vec![42; elf_size]).unwrap();
+        if with_idl {
+            let idl = directory.path().join("idl.json");
+            std::fs::write(&idl, br#"{"instructions":[]}"#).unwrap();
+            args.idl = Some(idl);
+        }
+        let read_balance = |lamports| {
+            let mut funded = account(system_program::SYSTEM_PROGRAM_ID);
+            funded.lamports = lamports;
+            ("read_account_info", json!({"result": funded}))
+        };
+        let mut receipt = processed(
+            json!({"type": "processed"}),
+            json!({"type": "notRolledback"}),
+        );
+        receipt["result"]["runtime_transaction"] = json!(RuntimeTransaction {
+            version: 0,
+            signatures: vec![],
+            message: ArchMessage::new(&[], None, Hash::from([0; 32])),
+        });
+        let mut replies = vec![read_balance(starting_balance)];
+        for index in 0..grants {
+            let balance = starting_balance + index * 1_000_000;
+            replies.extend([
+                read_balance(balance),
+                ("request_airdrop", json!({"result": "11".repeat(32)})),
+                ("get_processed_transaction", receipt.clone()),
+                read_balance(balance + 1_000_000),
+                read_balance(balance + 1_000_000),
+            ]);
+        }
+        replies.push((
+            "read_account_info",
+            json!({"error": {"code": -32603, "message": "stop before deployment"}}),
+        ));
+        let (result, requests) = crate::test_rpc::run(replies, |config| {
+            let config = Config {
+                network: bitcoin::Network::Testnet,
+                ..config.clone()
+            };
+            run(&config, args)
+        });
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("stop before deployment")
+        );
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|r| r["method"] == "request_airdrop")
+                .count(),
+            grants as usize
+        );
+    }
+}

@@ -1,13 +1,16 @@
 use std::path::{Path, PathBuf};
 
 use arch_sdk::{
-    ArchError, Config, Status,
+    ACCOUNT_FUNDING_AMOUNT, ArchError, Config, Status,
     arch_program::{
-        bpf_loader::BPF_LOADER_ID, pubkey::Pubkey, sanitized::ArchMessage, system_instruction,
-        system_program,
+        bpf_loader::{BPF_LOADER_ID, LoaderState},
+        pubkey::Pubkey,
+        rent::minimum_rent,
+        sanitized::ArchMessage,
+        system_instruction, system_program,
     },
     blocking::{ArchRpcClient, ProgramDeployer},
-    build_and_sign_transaction,
+    build_and_sign_transaction, extend_bytes_max_len,
 };
 use bitcoin::key::Keypair;
 
@@ -67,11 +70,13 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
 
     ensure_file(&args.elf, "program ELF")?;
     // Read now so invalid permissions or I/O fail before optional faucet use.
-    std::fs::read(&args.elf).map_err(|source| CliError::ReadInput {
-        label: "program ELF",
-        path: args.elf.clone(),
-        source,
-    })?;
+    let elf_size = std::fs::read(&args.elf)
+        .map_err(|source| CliError::ReadInput {
+            label: "program ELF",
+            path: args.elf.clone(),
+            source,
+        })?
+        .len();
 
     let (program_keypair, program_pubkey, generated_program_key) = load_or_generate_key(
         &args.program_key,
@@ -124,8 +129,34 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
             return Err(CliError::MainnetFaucetUnsupported);
         }
         println!("Funding deployment authority through the faucet...");
-        ArchRpcClient::new(config)
-            .create_and_fund_program_authority_with_faucet(&authority_keypair)?;
+        // Budget full program rent plus one fee per upload chunk and six setup/
+        // activation signatures. Reserve an extra grant for optional IDL publication.
+        let target = minimum_rent(LoaderState::program_data_offset() + elf_size)
+            + (elf_size.div_ceil(extend_bytes_max_len()) as u64 + 6) * 5_000
+            + minimum_rent(0)
+            + if args.idl.is_some() {
+                ACCOUNT_FUNDING_AMOUNT
+            } else {
+                0
+            };
+        let client = ArchRpcClient::new(config);
+        let mut balance = match client.read_account_info(authority_pubkey) {
+            Ok(account) => account.lamports,
+            Err(ArchError::NotFound(_)) => 0,
+            Err(error) => return Err(error.into()),
+        };
+        while balance < target {
+            println!("  Authority balance: {balance} lamports; target: {target} lamports");
+            client.create_and_fund_account_with_faucet(&authority_keypair)?;
+            let funded = client.read_account_info(authority_pubkey)?.lamports;
+            if funded <= balance {
+                return Err(ArchError::TransactionError(
+                    "faucet did not increase the authority balance".to_string(),
+                )
+                .into());
+            }
+            balance = funded;
+        }
         println!("Authority faucet funding completed.");
     }
 
