@@ -239,10 +239,12 @@ fn malformed_expected_program_id_fails_before_loading_files() {
 #[test]
 fn funding_scales_with_elf_size_and_skips_existing_funds() {
     for (elf_size, starting_balance, with_idl, grants) in [
-        (1_000, 0, false, 1),
-        (1_000_000, 0, false, 8),
-        (1_000_000, 8_000_000, false, 0),
-        (1_000, 0, true, 2),
+        (1_000, 0, false, 2),
+        (1_000_000, 0, false, 9),
+        // A balance covering the estimate must still include the safety margin.
+        (1_000_000, 8_000_000, false, 1),
+        (1_000_000, 9_000_000, false, 0),
+        (1_000, 0, true, 3),
     ] {
         let (directory, mut args) = deployment_args(None);
         args.fund_authority = true;

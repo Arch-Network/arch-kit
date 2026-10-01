@@ -130,10 +130,12 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
         }
         println!("Funding deployment authority through the faucet...");
         // Budget full program rent plus one fee per upload chunk and six setup/
-        // activation signatures. Reserve an extra grant for optional IDL publication.
+        // activation signatures. Always keep one grant as a safety margin, plus
+        // another for optional IDL publication.
         let target = minimum_rent(LoaderState::program_data_offset() + elf_size)
             + (elf_size.div_ceil(extend_bytes_max_len()) as u64 + 6) * 5_000
             + minimum_rent(0)
+            + ACCOUNT_FUNDING_AMOUNT
             + if args.idl.is_some() {
                 ACCOUNT_FUNDING_AMOUNT
             } else {
