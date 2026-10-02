@@ -2,9 +2,9 @@ use clap::{Parser, Subcommand};
 
 use crate::{
     commands::{
-        arch_balance, ata, build_idl, create_mint, deploy, faucet, init, keygen, mint_info,
-        mint_tokens, pubkey, token_account, token_accounts, token_balance, token_transfer,
-        transfer_arch,
+        arch_balance, ata, build_idl, create_mint, deploy, encryption, faucet, init, keygen,
+        mint_info, mint_tokens, pubkey, token_account, token_accounts, token_balance,
+        token_transfer, transfer_arch,
     },
     network::{BitcoinNetwork, DEFAULT_RPC_URL},
 };
@@ -57,6 +57,12 @@ pub(crate) enum Command {
 
     /// Derive an Arch public key from a secret key file.
     Pubkey(pubkey::Args),
+
+    /// Encrypt a UTF-8 message using a secret key file and AES-256-GCM.
+    Encrypt(encryption::Args),
+
+    /// Decrypt an AES-256-GCM message using the same secret key file.
+    Decrypt(encryption::Args),
 
     /// Derive an associated token account address for an owner and mint.
     Ata(ata::Args),

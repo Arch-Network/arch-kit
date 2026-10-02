@@ -111,6 +111,8 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | --- | --- | --- |
 | [`keygen`](#generate-keys) | `arch-kit keygen [OPTIONS] <PATH>...` | Generate one or more secp256k1 key files, with optional public key prefixes (vanity). |
 | [`pubkey`](#derive-a-public-key) | `arch-kit pubkey <PATH>` | Derive a Base58 Arch public key from a secret key file. |
+| [`encrypt`](#encrypt-and-decrypt-messages) | `arch-kit encrypt --key <PATH> [TEXT]` | Encrypt a UTF-8 message with AES-256-GCM. |
+| [`decrypt`](#encrypt-and-decrypt-messages) | `arch-kit decrypt --key <PATH> [TEXT]` | Decrypt a message using the same secret key file. |
 
 ### Token program
 
@@ -244,6 +246,33 @@ arch-kit pubkey ./keys/authority.key
 
 The command reads either supported secret-key file format and writes only the
 derived Base58 Arch public key to standard output.
+
+## Encrypt and decrypt messages
+
+```bash
+arch-kit encrypt --key ./keys/authority.key "Hello"
+arch-kit decrypt --key ./keys/authority.key "<encrypted-payload>"
+
+# Omit TEXT to read from stdin:
+printf 'Hello' | arch-kit encrypt --key ./keys/authority.key > message.enc
+arch-kit decrypt --key ./keys/authority.key < message.enc
+```
+
+Both commands run locally and accept existing hex or SDK JSON secret-key files.
+Encryption and decryption require the same private key. Messages must be UTF-8;
+empty messages, Unicode, and multiline text are supported. Encryption prints a
+Base64 payload with a trailing newline. Decryption preserves the original text
+exactly without adding a newline. Add `--json` for `{"ciphertext":"..."}` or
+`{"message":"..."}` output. Authentication failures exit unsuccessfully without
+printing plaintext.
+
+Encryption uses [RustCrypto AES-GCM](https://docs.rs/aes-gcm/), whose documentation
+reports an NCC Group audit. A dedicated 32-byte AES key is derived from the raw
+32-byte private key using HKDF-SHA256, no salt, and the context
+`arch-kit/message-encryption/v1`. Each message uses a fresh OS-random 12-byte
+nonce and a full 16-byte authentication tag. The format is standard padded Base64
+of `0x01 || nonce || ciphertext || tag`; the version byte is authenticated as
+associated data. Surrounding whitespace in an encrypted payload is ignored.
 
 ## Inspect tokens
 

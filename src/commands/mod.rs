@@ -3,6 +3,7 @@ pub(crate) mod ata;
 pub(crate) mod build_idl;
 pub(crate) mod create_mint;
 pub(crate) mod deploy;
+pub(crate) mod encryption;
 pub(crate) mod faucet;
 pub(crate) mod health;
 pub(crate) mod init;
