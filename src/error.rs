@@ -59,6 +59,9 @@ pub(crate) enum CliError {
     #[error("vanity key search failed: {0}")]
     VanitySearch(String),
 
+    #[error("message encryption/decryption failed: {0}")]
+    MessageCrypto(String),
+
     #[error("signer error: {0}")]
     Signer(String),
 

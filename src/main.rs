@@ -40,6 +40,8 @@ fn run() -> Result<()> {
         Command::BuildIdl(args) => commands::build_idl::run(args),
         Command::Keygen(args) => commands::keygen::run(args),
         Command::Pubkey(args) => commands::pubkey::run(args),
+        Command::Encrypt(args) => commands::encryption::run_encrypt(args, json),
+        Command::Decrypt(args) => commands::encryption::run_decrypt(args, json),
         Command::Ata(args) => commands::ata::run(args),
         Command::TokenBalance(args) => {
             commands::token_balance::run(&network::config(rpc_url, bitcoin_network)?, args, json)
