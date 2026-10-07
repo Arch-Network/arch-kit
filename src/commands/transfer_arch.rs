@@ -184,7 +184,6 @@ mod tests {
             lamports: 100_005_000,
             owner: system_program::SYSTEM_PROGRAM_ID,
             data: Vec::new(),
-            utxo: String::new(),
             is_executable: false,
         };
         assert!(validate_source_account(address, &valid, 100_005_000).is_ok());
