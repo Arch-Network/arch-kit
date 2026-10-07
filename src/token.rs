@@ -275,7 +275,6 @@ mod tests {
             lamports: 0,
             owner,
             data,
-            utxo: String::new(),
             is_executable: false,
         }
     }

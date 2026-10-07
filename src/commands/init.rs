@@ -13,7 +13,7 @@ use crate::{
     keys::{load_existing_key, pubkey_hex},
 };
 
-const SATELLITE_VERSION: &str = "0.31.5";
+const SATELLITE_VERSION: &str = "0.34.0";
 static SIMPLE_PROGRAM_TEMPLATE: Dir<'_> =
     include_dir!("$CARGO_MANIFEST_DIR/templates/simple_program");
 
@@ -356,7 +356,7 @@ mod tests {
 
         assert!(manifest.contains("name = \"hello-world\""));
         assert!(manifest.contains("[workspace]"));
-        assert!(manifest.contains("arch-satellite-lang = \"=0.31.5\""));
+        assert!(manifest.contains("arch-satellite-lang = \"=0.34.0\""));
         assert!(manifest.contains("unicode-segmentation = \"=1.12.0\""));
         assert!(source.contains(
             "declare_id!(\"1b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f\")"

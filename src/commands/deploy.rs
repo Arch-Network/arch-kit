@@ -209,7 +209,7 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
     Ok(())
 }
 
-// SDK 0.10.0 skips account creation whenever the program account exists, even
+// SDK 0.12.0 skips account creation whenever the program account exists, even
 // when it is an empty System account created by an earlier funding transfer.
 fn prepare_program_account(
     config: &Config,
@@ -258,13 +258,10 @@ fn prepare_program_account(
     )?;
     let txid = client.send_transaction(transaction)?;
     let processed = client.wait_for_processed_transaction(&txid)?;
-    if processed.status != Status::Processed || !processed.rollback_status.is_applied() {
+    if processed.status != Status::Processed {
         return Err(CliError::TransactionFailed {
             action: format!("program account assignment ({txid})"),
-            status: format!(
-                "{:?}, rollback={:?}",
-                processed.status, processed.rollback_status
-            ),
+            status: format!("{:?}", processed.status),
         });
     }
     let assigned = client.read_account_info(program)?;

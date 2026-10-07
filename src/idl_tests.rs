@@ -40,7 +40,6 @@ fn account(prepared: &PreparedIdl, capacity: usize) -> AccountInfo {
         lamports: minimum_rent(capacity),
         owner: program(),
         data,
-        utxo: format!("{}:0", "00".repeat(32)),
         is_executable: false,
     }
 }
@@ -49,7 +48,7 @@ fn read_reply(account: &AccountInfo) -> (&'static str, Value) {
     ("read_account_info", json!({"result": account}))
 }
 
-fn transaction_replies(status: Value, rollback: Value) -> Vec<(&'static str, Value)> {
+fn transaction_replies(status: Value) -> Vec<(&'static str, Value)> {
     vec![
         (
             "get_best_finalized_block_hash",
@@ -59,7 +58,7 @@ fn transaction_replies(status: Value, rollback: Value) -> Vec<(&'static str, Val
         (
             "get_processed_transaction",
             json!({"result": {
-                "status": status, "rollback_status": rollback,
+                "status": status,
                 "bitcoin_txid": null, "logs": [], "inner_instructions_list": [],
             }}),
         ),
@@ -67,10 +66,7 @@ fn transaction_replies(status: Value, rollback: Value) -> Vec<(&'static str, Val
 }
 
 fn successful_transaction() -> Vec<(&'static str, Value)> {
-    transaction_replies(
-        json!({"type": "processed"}),
-        json!({"type": "notRolledback"}),
-    )
+    transaction_replies(json!({"type": "processed"}))
 }
 
 fn resize_setup(existing: &AccountInfo) -> Vec<(&'static str, Value)> {
@@ -349,26 +345,17 @@ fn upgrades_that_fit_keep_existing_capacity_with_either_flag_value() {
 }
 
 #[test]
-fn rejected_or_rolled_back_resize_stops_before_uploading_an_upgrade() {
-    for (status, rollback) in [
-        (
-            json!({"type": "failed", "message": "IdlAccountNotEmpty"}),
-            json!({"type": "notRolledback"}),
-        ),
-        (
-            json!({"type": "processed"}),
-            json!({"type": "rolledback", "message": "Reverted"}),
-        ),
-    ] {
-        let old = prepared(None);
-        let existing = account(&old, required_space(old.compressed.len()).unwrap());
-        let mut replies = vec![read_reply(&existing)];
-        replies.extend(resize_setup(&existing));
-        replies.extend(transaction_replies(status, rollback));
-        let (result, transactions) = run_publish(replies, updated(), true);
-        assert!(matches!(result, Err(CliError::TransactionFailed { .. })));
-        assert_eq!(transactions.len(), 3);
-    }
+fn rejected_resize_stops_before_uploading_an_upgrade() {
+    let old = prepared(None);
+    let existing = account(&old, required_space(old.compressed.len()).unwrap());
+    let mut replies = vec![read_reply(&existing)];
+    replies.extend(resize_setup(&existing));
+    replies.extend(transaction_replies(
+        json!({"type": "failed", "message": "IdlAccountNotEmpty"}),
+    ));
+    let (result, transactions) = run_publish(replies, updated(), true);
+    assert!(matches!(result, Err(CliError::TransactionFailed { .. })));
+    assert_eq!(transactions.len(), 3);
 }
 
 #[test]

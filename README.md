@@ -3,6 +3,11 @@
 `arch-kit` is a CLI for generating Arch keys, deploying programs, publishing
 canonical on-chain IDLs, and inspecting APL tokens.
 
+arch-kit targets Arch Network 0.12 (`arch_sdk`, `apl-token`, and
+`apl-associated-token-account` 0.12.0). Arch 0.12 reset the chain and removed
+account UTXO anchoring and transaction rollback status from RPC responses, so
+use arch-kit 0.1.7 or earlier only against pre-0.12 nodes.
+
 ## Install
 
 Install the published crate with Cargo:
@@ -40,7 +45,7 @@ with the reusable workflow:
 ```yaml
 jobs:
   deploy:
-    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.7
+    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.8
     with:
       program-path: program
       bitcoin-network: testnet
@@ -185,7 +190,9 @@ The destination must not exist. The command creates a Satellite program whose
 declared ID is derived from the supplied program key. Its `say_hello`
 instruction requires a user signer and logs `Hello <USER_BASE58_PUBKEY>`; the
 signature constraint uses the custom error defined in `src/error.rs`. The
-secret key is read only and is not copied into the project.
+generated project depends on `arch-satellite-lang` 0.34.0, which builds on
+`arch_program` 0.12.0. The secret key is read only and is not copied into the
+project.
 
 Build the generated program from its project directory, or pass its manifest
 path explicitly:
