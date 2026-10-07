@@ -17,19 +17,18 @@ fn account(owner: Pubkey) -> AccountInfo {
         lamports: 500_000_000,
         owner,
         data: vec![],
-        utxo: format!("{}:0", "00".repeat(32)),
         is_executable: false,
     }
 }
 
-fn processed(status: Value, rollback: Value) -> Value {
+fn processed(status: Value) -> Value {
     json!({"result": {
-        "status": status, "rollback_status": rollback,
+        "status": status,
         "bitcoin_txid": null, "logs": [], "inner_instructions_list": [],
     }})
 }
 
-fn assignment_replies(status: Value, rollback: Value) -> Vec<(&'static str, Value)> {
+fn assignment_replies(status: Value) -> Vec<(&'static str, Value)> {
     vec![
         (
             "read_account_info",
@@ -40,7 +39,7 @@ fn assignment_replies(status: Value, rollback: Value) -> Vec<(&'static str, Valu
             json!({"result": "00".repeat(32)}),
         ),
         ("send_transaction", json!({"result": "11".repeat(32)})),
-        ("get_processed_transaction", processed(status, rollback)),
+        ("get_processed_transaction", processed(status)),
     ]
 }
 
@@ -52,10 +51,7 @@ fn run_rpc(replies: Vec<(&'static str, Value)>) -> (Result<()>, Vec<Value>) {
 
 #[test]
 fn funded_system_account_is_assigned_with_both_mainnet_signatures() {
-    let mut replies = assignment_replies(
-        json!({"type": "processed"}),
-        json!({"type": "notRolledback"}),
-    );
+    let mut replies = assignment_replies(json!({"type": "processed"}));
     replies.push((
         "read_account_info",
         json!({"result": account(BPF_LOADER_ID)}),
@@ -117,28 +113,16 @@ fn invalid_accounts_and_rpc_errors_stop_before_submission() {
 }
 
 #[test]
-fn failed_or_rolled_back_assignment_stops_deployment() {
-    for (status, rollback) in [
-        (
-            json!({"type": "failed", "message": "Insufficient funds"}),
-            json!({"type": "notRolledback"}),
-        ),
-        (
-            json!({"type": "processed"}),
-            json!({"type": "rolledback", "message": "Reverted"}),
-        ),
-    ] {
-        let (result, _) = run_rpc(assignment_replies(status, rollback));
-        assert!(matches!(result, Err(CliError::TransactionFailed { .. })));
-    }
+fn failed_assignment_stops_deployment() {
+    let (result, _) = run_rpc(assignment_replies(
+        json!({"type": "failed", "message": "Insufficient funds"}),
+    ));
+    assert!(matches!(result, Err(CliError::TransactionFailed { .. })));
 }
 
 #[test]
 fn unchanged_owner_after_processed_assignment_stops_deployment() {
-    let mut replies = assignment_replies(
-        json!({"type": "processed"}),
-        json!({"type": "notRolledback"}),
-    );
+    let mut replies = assignment_replies(json!({"type": "processed"}));
     replies.push((
         "read_account_info",
         json!({"result": account(system_program::SYSTEM_PROGRAM_ID)}),
@@ -259,10 +243,7 @@ fn funding_scales_with_elf_size_and_skips_existing_funds() {
             funded.lamports = lamports;
             ("read_account_info", json!({"result": funded}))
         };
-        let mut receipt = processed(
-            json!({"type": "processed"}),
-            json!({"type": "notRolledback"}),
-        );
+        let mut receipt = processed(json!({"type": "processed"}));
         receipt["result"]["runtime_transaction"] = json!(RuntimeTransaction {
             version: 0,
             signatures: vec![],

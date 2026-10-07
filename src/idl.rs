@@ -556,13 +556,10 @@ fn send(
     let transaction = build_and_sign_transaction(message, signers, client.config.network)?;
     let transaction_id = client.send_transaction(transaction)?;
     let processed = client.wait_for_processed_transaction(&transaction_id)?;
-    if processed.status != Status::Processed || !processed.rollback_status.is_applied() {
+    if processed.status != Status::Processed {
         return Err(CliError::TransactionFailed {
             action,
-            status: format!(
-                "{:?}, rollback={:?}",
-                processed.status, processed.rollback_status
-            ),
+            status: format!("{:?}", processed.status),
         });
     }
     println!("  {action}: {transaction_id}");
@@ -771,7 +768,6 @@ mod tests {
             lamports: 0,
             owner: program,
             data,
-            utxo: String::new(),
             is_executable: false,
         };
 
