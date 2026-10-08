@@ -45,7 +45,7 @@ with the reusable workflow:
 ```yaml
 jobs:
   deploy:
-    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.8
+    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.9
     with:
       program-path: program
       bitcoin-network: testnet
@@ -218,9 +218,12 @@ declared instructions and accounts.
 arch-kit health
 ```
 
-The command checks validator readiness, reports RPC latency, and samples the
-block height twice. It exits successfully only when the node is ready and the
-height increases during its two-second observation window.
+The command checks validator readiness, reports RPC latency, and polls the
+block height once a second for up to twenty seconds. It exits successfully as
+soon as the node is ready and the height has moved, and fails only when the
+height does not move within the timeout. A healthy chain still has multi-second
+gaps between consecutive blocks, which is why a single short window is not
+enough.
 
 ## Generate keys
 
