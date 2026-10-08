@@ -68,7 +68,7 @@ permissions:
   contents: read
 
 env:
-  ARCH_KIT_VERSION: 0.1.8
+  ARCH_KIT_VERSION: 0.1.9
   ANZA_VERSION: v3.1.9
   CARGO_TERM_COLOR: always
 
