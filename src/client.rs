@@ -8,7 +8,12 @@ use bitcoin::Network;
 use thiserror::Error;
 
 const IS_NODE_READY: &str = "is_node_ready";
-const BLOCK_PROGRESS_WINDOW: Duration = Duration::from_secs(2);
+/// A healthy chain still has multi-second gaps between blocks (3.5 s between
+/// two consecutive blocks was observed on a chain averaging nine blocks per
+/// second), so progress is polled until the height moves, bounded by this
+/// timeout, instead of being judged from one fixed window.
+const BLOCK_PROGRESS_TIMEOUT: Duration = Duration::from_secs(20);
+const BLOCK_PROGRESS_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// The smallest reusable Arch client, currently limited to node health.
 #[derive(Clone, Debug)]
@@ -26,8 +31,9 @@ impl ArchKitClient {
         Ok(Self { rpc_url })
     }
 
-    /// Check that the node is ready and produces a new block during the
-    /// observation window.
+    /// Check that the node is ready and produces a new block within the
+    /// progress timeout. The returned `observation_window` is the time it
+    /// took to see the height move.
     pub fn health(&self) -> Result<HealthStatus, ArchKitError> {
         let started_at = Instant::now();
         let config = self.rpc_config();
@@ -43,23 +49,36 @@ impl ArchKitClient {
         let initial_block_height = client
             .get_block_count()
             .map_err(|source| self.rpc_error(source))?;
-        thread::sleep(BLOCK_PROGRESS_WINDOW);
-        let final_block_height = client
-            .get_block_count()
-            .map_err(|source| self.rpc_error(source))?;
-        require_progress(
+        let observation_started_at = Instant::now();
+        let progress = wait_for_progress(
             initial_block_height,
-            final_block_height,
-            BLOCK_PROGRESS_WINDOW.as_secs(),
-            &self.rpc_url,
+            BLOCK_PROGRESS_TIMEOUT,
+            BLOCK_PROGRESS_POLL_INTERVAL,
+            || {
+                client
+                    .get_block_count()
+                    .map_err(|source| self.rpc_error(source))
+            },
         )?;
+        let observation_window = observation_started_at.elapsed();
+        let final_block_height = match progress {
+            Progress::Advanced(height) => height,
+            Progress::Stalled(height) => {
+                return Err(ArchKitError::BlocksNotProgressing {
+                    rpc_url: self.rpc_url.clone(),
+                    initial_height: initial_block_height,
+                    final_height: height,
+                    observation_seconds: observation_window.as_secs(),
+                });
+            }
+        };
 
         Ok(HealthStatus {
             rpc_url: self.rpc_url.clone(),
             initial_block_height,
             final_block_height,
             rpc_latency,
-            observation_window: BLOCK_PROGRESS_WINDOW,
+            observation_window,
             total_elapsed: started_at.elapsed(),
         })
     }
@@ -144,21 +163,34 @@ fn require_ready(readiness: Option<bool>, rpc_url: &str) -> Result<(), ArchKitEr
     }
 }
 
-fn require_progress(
+/// Outcome of watching the block height after an initial sample.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Progress {
+    /// The height rose above the initial sample; carries the height seen.
+    Advanced(u64),
+    /// The timeout passed without the height rising; carries the last height.
+    Stalled(u64),
+}
+
+/// Poll `sample` every `poll_interval` until it exceeds `initial_height` or
+/// `timeout` elapses. A sampling error ends the wait immediately, since a
+/// node that stops answering is not healthy either.
+fn wait_for_progress<E>(
     initial_height: u64,
-    final_height: u64,
-    observation_seconds: u64,
-    rpc_url: &str,
-) -> Result<(), ArchKitError> {
-    if final_height > initial_height {
-        Ok(())
-    } else {
-        Err(ArchKitError::BlocksNotProgressing {
-            rpc_url: rpc_url.to_string(),
-            initial_height,
-            final_height,
-            observation_seconds,
-        })
+    timeout: Duration,
+    poll_interval: Duration,
+    mut sample: impl FnMut() -> Result<u64, E>,
+) -> Result<Progress, E> {
+    let started_at = Instant::now();
+    loop {
+        thread::sleep(poll_interval);
+        let height = sample()?;
+        if height > initial_height {
+            return Ok(Progress::Advanced(height));
+        }
+        if started_at.elapsed() >= timeout {
+            return Ok(Progress::Stalled(height));
+        }
     }
 }
 
@@ -188,20 +220,48 @@ mod tests {
     }
 
     #[test]
-    fn requires_the_block_height_to_increase() {
-        assert!(require_progress(100, 101, 2, "http://node").is_ok());
+    fn progress_is_reported_as_soon_as_the_height_moves() {
+        let mut samples = [100, 100, 101].into_iter();
+        let progress = wait_for_progress::<()>(
+            100,
+            Duration::from_secs(10),
+            Duration::from_millis(1),
+            || Ok(samples.next().expect("sample")),
+        );
+        assert_eq!(progress, Ok(Progress::Advanced(101)));
+    }
 
-        for final_height in [100, 99] {
-            assert!(matches!(
-                require_progress(100, final_height, 2, "http://node"),
-                Err(ArchKitError::BlocksNotProgressing {
-                    initial_height: 100,
-                    final_height: observed,
-                    observation_seconds: 2,
-                    ..
-                }) if observed == final_height
-            ));
-        }
+    #[test]
+    fn a_stalled_height_is_reported_after_the_timeout() {
+        let progress = wait_for_progress::<()>(
+            100,
+            Duration::from_millis(5),
+            Duration::from_millis(1),
+            || Ok(100),
+        );
+        assert_eq!(progress, Ok(Progress::Stalled(100)));
+    }
+
+    #[test]
+    fn a_lower_height_never_counts_as_progress() {
+        let progress = wait_for_progress::<()>(
+            100,
+            Duration::from_millis(5),
+            Duration::from_millis(1),
+            || Ok(99),
+        );
+        assert_eq!(progress, Ok(Progress::Stalled(99)));
+    }
+
+    #[test]
+    fn a_sampling_error_ends_the_wait() {
+        let progress = wait_for_progress(
+            100,
+            Duration::from_secs(10),
+            Duration::from_millis(1),
+            || Err("rpc down"),
+        );
+        assert_eq!(progress, Err("rpc down"));
     }
 
     #[test]
