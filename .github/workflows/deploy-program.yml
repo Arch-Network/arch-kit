@@ -226,7 +226,21 @@ jobs:
         env:
           RPC_URL: ${{ inputs.rpc-url }}
           BITCOIN_NETWORK: ${{ inputs.bitcoin-network }}
-        run: arch-kit --rpc-url "${RPC_URL}" --bitcoin-network "${BITCOIN_NETWORK}" health
+        # `health` samples the block height twice, 2 s apart, and fails when it
+        # did not move. A healthy chain still has multi-second gaps between
+        # blocks (3.5 s observed on internal-b at v0.12.0), so one probe that
+        # lands in such a gap must not fail the deploy. Five probes 10 s apart
+        # fail only when the chain is actually stalled.
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if arch-kit --rpc-url "${RPC_URL}" --bitcoin-network "${BITCOIN_NETWORK}" health; then
+              exit 0
+            fi
+            echo "health probe ${attempt}/5 failed; retrying in 10 s" >&2
+            sleep 10
+          done
+          echo "::error::Arch node at ${RPC_URL} failed the health probe 5 times" >&2
+          exit 1
 
       - name: Deploy program and IDL
         env:
