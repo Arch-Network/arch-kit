@@ -35,6 +35,24 @@ After pulling changes, update the installed binary with:
 cargo install --path . --force
 ```
 
+### Prebuilt binary (x86_64 Linux)
+
+Every published version also has a prebuilt binary on its GitHub release
+`v<version>`, built from the commit crates.io packaged it from. It needs glibc
+2.39+ and OpenSSL 3, as on Ubuntu 24.04 and the `ubuntu-24.04` /
+`ubuntu-latest` GitHub runners. Downloading it takes seconds where
+`cargo install` compiles for minutes, so CI should prefer it; pin the SHA-256
+from the release notes:
+
+```bash
+ARCH_KIT_VERSION=0.1.8
+ARCH_KIT_SHA256=<SHA-256 from the v0.1.8 release notes>
+name="arch-kit-${ARCH_KIT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+curl -fsSLO "https://github.com/Arch-Network/arch-kit/releases/download/v${ARCH_KIT_VERSION}/${name}"
+echo "${ARCH_KIT_SHA256}  ${name}" | sha256sum -c -
+mkdir -p "$HOME/.local/bin" && tar -xzf "${name}" -C "$HOME/.local/bin" arch-kit
+```
+
 ## GitHub deployment workflow
 
 Store the program and authority key contents as `PROGRAM_KEY` and
@@ -442,5 +460,9 @@ Maintainers publish from GitHub Actions using the `Publish Crate` workflow.
 Configure a protected `crates-io` environment containing the
 `CRATES_IO_TOKEN` secret, update `Cargo.toml`, `Cargo.lock`, and the pinned
 `ARCH_KIT_VERSION` in the reusable workflow, then run the workflow with that
-version. After publication, create the matching immutable Git tag, such as
-`v0.1.0`, for workflow consumers.
+version. After publication it calls `Release binary`, which builds the x86_64
+Linux binary from the commit crates.io packaged and attaches it, with its
+SHA-256, to the GitHub release `v<version>`, creating that release and its
+immutable tag. To add a binary to a version published earlier, run
+`Release binary` by hand with the version. Published assets are never replaced;
+if only the release job failed, re-run that job rather than the whole workflow.

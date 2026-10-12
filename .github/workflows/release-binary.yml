@@ -1,0 +1,210 @@
+# Release binary: the arch-kit CLI, prebuilt for x86_64 Linux.
+#
+# Builds the binary from the exact commit a crates.io version was packaged from
+# (crates.io records it in the crate's .cargo_vcs_info.json) and attaches it,
+# with its SHA-256, to the GitHub release `v<version>`, creating the release and
+# its tag when missing. Workflows then download it in seconds instead of
+# compiling it with `cargo install` (about four minutes on a hosted runner).
+#
+# The binary targets x86_64-unknown-linux-gnu, built on ubuntu-24.04: it needs
+# glibc 2.39+ and OpenSSL 3 (libssl.so.3), which every ubuntu-24.04 /
+# ubuntu-latest runner has. OpenSSL is linked dynamically because arch_sdk's
+# reqwest uses native-tls.
+#
+# publish-crate.yml calls this after each publish; dispatch it by hand to add the
+# binary to a version published before. A published asset is never replaced, so
+# a checksum consumers pinned stays valid: a re-run that would upload different
+# bytes fails instead. Pull requests build and smoke-test without releasing.
+
+name: Release binary
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: A version already published to crates.io
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+  pull_request:
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - src/**
+      - templates/**
+      - .github/workflows/release-binary.yml
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  TARGET: x86_64-unknown-linux-gnu
+  VERSION: ${{ inputs.version }}
+
+jobs:
+  build:
+    name: Build arch-kit ${{ inputs.version || 'for this pull request' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      commit: ${{ steps.commit.outputs.sha }}
+    steps:
+      - name: Resolve the published commit
+        id: commit
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          set -euo pipefail
+          [[ "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || {
+            echo "::error::version '${VERSION}' is not a semver version" >&2
+            exit 1
+          }
+          # Retried: right after `cargo publish` the crate takes a moment to appear.
+          crate="${RUNNER_TEMP}/arch-kit.crate"
+          fetched=false
+          for _ in $(seq 1 12); do
+            if curl -fsSL "https://static.crates.io/crates/arch-kit/arch-kit-${VERSION}.crate" -o "${crate}"; then
+              fetched=true
+              break
+            fi
+            sleep 10
+          done
+          "${fetched}" || { echo "::error::arch-kit ${VERSION} is not on crates.io" >&2; exit 1; }
+          sha="$(tar -xzOf "${crate}" "arch-kit-${VERSION}/.cargo_vcs_info.json" | jq -r '.git.sha1 // empty')"
+          [[ "${sha}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "::error::arch-kit ${VERSION} was published without a recorded commit" >&2
+            exit 1
+          }
+          echo "arch-kit ${VERSION} was published from ${sha}"
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.commit.outputs.sha || github.sha }}
+
+      - name: Check the version
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          set -euo pipefail
+          crate_version="$(
+            cargo metadata --no-deps --format-version 1 |
+              jq -r '.packages[] | select(.name == "arch-kit") | .version'
+          )"
+          test "${crate_version}" = "${VERSION}" || {
+            echo "::error::the published commit's Cargo.toml says ${crate_version}, not ${VERSION}" >&2
+            exit 1
+          }
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          rustflags: ""
+
+      - name: Build
+        run: cargo build --locked --release --bin arch-kit
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          reported="$(target/release/arch-kit --version)"
+          echo "${reported}"
+          if [ -n "${VERSION}" ]; then
+            test "${reported}" = "arch-kit ${VERSION}"
+          fi
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          name="arch-kit-${VERSION:-pr}-${TARGET}"
+          mkdir -p dist
+          tar -czf "dist/${name}.tar.gz" -C target/release arch-kit
+          (cd dist && sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256")
+          cat "dist/${name}.tar.gz.sha256"
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-kit-${{ env.TARGET }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    name: Attach to release v${{ inputs.version }}
+    needs: build
+    if: ${{ github.event_name != 'pull_request' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      COMMIT: ${{ needs.build.outputs.commit }}
+    steps:
+      - name: Download the package
+        uses: actions/download-artifact@v4
+        with:
+          name: arch-kit-${{ env.TARGET }}
+          path: dist
+
+      - name: Create or update the release
+        run: |
+          set -euo pipefail
+          tag="v${VERSION}"
+          name="arch-kit-${VERSION}-${TARGET}"
+          sha256="$(cut -d' ' -f1 "dist/${name}.tar.gz.sha256")"
+          # An existing tag must already point at the published commit: `--target`
+          # only places a tag that does not exist yet. matching-refs answers [] for
+          # an absent tag, so a failed lookup cannot pass for "no tag".
+          tag_refs="$(gh api "repos/${REPO}/git/matching-refs/tags/${tag}" \
+            --jq "[.[] | select(.ref == \"refs/tags/${tag}\")] | length")"
+          if [ "${tag_refs}" != 0 ]; then
+            tag_commit="$(gh api "repos/${REPO}/commits/refs/tags/${tag}" --jq .sha)"
+            test "${tag_commit}" = "${COMMIT}" || {
+              echo "::error::tag ${tag} points at ${tag_commit}, but ${VERSION} was published from ${COMMIT}" >&2
+              exit 1
+            }
+          fi
+          notes="$(printf '%s\n' \
+            "arch-kit ${VERSION}, built from ${COMMIT} (the commit crates.io packaged it from)." \
+            "" \
+            "\`${name}.tar.gz\` (x86_64 Linux, glibc 2.39+ and OpenSSL 3, e.g. ubuntu-24.04):" \
+            "" \
+            '```' \
+            "SHA-256 ${sha256}" \
+            '```')"
+          if ! gh release view "${tag}" -R "${REPO}" > /dev/null 2>&1; then
+            gh release create "${tag}" -R "${REPO}" --target "${COMMIT}" \
+              --title "arch-kit ${VERSION}" --notes "${notes}"
+          fi
+          # Published bytes never change: skip an identical asset, refuse a different one.
+          for file in "${name}.tar.gz" "${name}.tar.gz.sha256"; do
+            existing="${RUNNER_TEMP}/existing"
+            rm -rf "${existing}"
+            if gh release download "${tag}" -R "${REPO}" -p "${file}" -D "${existing}" 2> /dev/null; then
+              cmp -s "${existing}/${file}" "dist/${file}" || {
+                echo "::error::release ${tag} already has a different ${file}; published assets are never replaced" >&2
+                exit 1
+              }
+              echo "${file}: already attached"
+            else
+              gh release upload "${tag}" -R "${REPO}" "dist/${file}"
+              echo "${file}: attached"
+            fi
+          done
+          # A release that existed before (a backfill) keeps its notes and gains the
+          # checksum consumers pin, once.
+          body="$(gh release view "${tag}" -R "${REPO}" --json body --jq .body)"
+          if ! grep -qF "SHA-256 ${sha256}" <<< "${body}"; then
+            gh release edit "${tag}" -R "${REPO}" --notes "$(printf '%s\n\n%s\n' "${body}" "${notes}")"
+            echo "release notes: checksum added"
+          fi
+          {
+            echo "### arch-kit ${VERSION} binary"
+            echo "- release: https://github.com/${REPO}/releases/tag/${tag}"
+            echo "- commit: \`${COMMIT}\`"
+            echo "- \`${name}.tar.gz\` SHA-256: \`${sha256}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"
