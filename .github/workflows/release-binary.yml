@@ -156,21 +156,27 @@ jobs:
           tag="v${VERSION}"
           name="arch-kit-${VERSION}-${TARGET}"
           sha256="$(cut -d' ' -f1 "dist/${name}.tar.gz.sha256")"
-          if gh release view "${tag}" -R "${REPO}" > /dev/null 2>&1; then
-            tag_commit="$(gh api "repos/${REPO}/commits/${tag}" --jq .sha)"
+          # An existing tag must already point at the published commit: `--target`
+          # only places a tag that does not exist yet. matching-refs answers [] for
+          # an absent tag, so a failed lookup cannot pass for "no tag".
+          tag_refs="$(gh api "repos/${REPO}/git/matching-refs/tags/${tag}" \
+            --jq "[.[] | select(.ref == \"refs/tags/${tag}\")] | length")"
+          if [ "${tag_refs}" != 0 ]; then
+            tag_commit="$(gh api "repos/${REPO}/commits/refs/tags/${tag}" --jq .sha)"
             test "${tag_commit}" = "${COMMIT}" || {
               echo "::error::tag ${tag} points at ${tag_commit}, but ${VERSION} was published from ${COMMIT}" >&2
               exit 1
             }
-          else
-            notes="$(printf '%s\n' \
-              "arch-kit ${VERSION}, built from ${COMMIT} (the commit crates.io packaged it from)." \
-              "" \
-              "\`${name}.tar.gz\` (x86_64 Linux, glibc 2.39+ and OpenSSL 3, e.g. ubuntu-24.04):" \
-              "" \
-              '```' \
-              "SHA-256 ${sha256}" \
-              '```')"
+          fi
+          notes="$(printf '%s\n' \
+            "arch-kit ${VERSION}, built from ${COMMIT} (the commit crates.io packaged it from)." \
+            "" \
+            "\`${name}.tar.gz\` (x86_64 Linux, glibc 2.39+ and OpenSSL 3, e.g. ubuntu-24.04):" \
+            "" \
+            '```' \
+            "SHA-256 ${sha256}" \
+            '```')"
+          if ! gh release view "${tag}" -R "${REPO}" > /dev/null 2>&1; then
             gh release create "${tag}" -R "${REPO}" --target "${COMMIT}" \
               --title "arch-kit ${VERSION}" --notes "${notes}"
           fi
@@ -189,6 +195,13 @@ jobs:
               echo "${file}: attached"
             fi
           done
+          # A release that existed before (a backfill) keeps its notes and gains the
+          # checksum consumers pin, once.
+          body="$(gh release view "${tag}" -R "${REPO}" --json body --jq .body)"
+          if ! grep -qF "SHA-256 ${sha256}" <<< "${body}"; then
+            gh release edit "${tag}" -R "${REPO}" --notes "$(printf '%s\n\n%s\n' "${body}" "${notes}")"
+            echo "release notes: checksum added"
+          fi
           {
             echo "### arch-kit ${VERSION} binary"
             echo "- release: https://github.com/${REPO}/releases/tag/${tag}"
