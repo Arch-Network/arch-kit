@@ -115,9 +115,6 @@ pub(crate) enum CliError {
     #[error("IDL payload is too large for the protocol length field: {bytes} bytes")]
     IdlPayloadTooLarge { bytes: usize },
 
-    #[error("faucet funding cannot be used with the mainnet signing network")]
-    MainnetFaucetUnsupported,
-
     #[error("program deployment failed: {0}")]
     ProgramDeploy(#[from] arch_sdk::ProgramDeployerError),
 

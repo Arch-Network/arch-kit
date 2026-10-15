@@ -45,8 +45,8 @@ Every published version also has a prebuilt binary on its GitHub release
 from the release notes:
 
 ```bash
-ARCH_KIT_VERSION=0.1.8
-ARCH_KIT_SHA256=<SHA-256 from the v0.1.8 release notes>
+ARCH_KIT_VERSION=0.1.9
+ARCH_KIT_SHA256=<SHA-256 from the v0.1.9 release notes>
 name="arch-kit-${ARCH_KIT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
 curl -fsSLO "https://github.com/Arch-Network/arch-kit/releases/download/v${ARCH_KIT_VERSION}/${name}"
 echo "${ARCH_KIT_SHA256}  ${name}" | sha256sum -c -
@@ -63,7 +63,7 @@ with the reusable workflow:
 ```yaml
 jobs:
   deploy:
-    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.8
+    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.9
     with:
       program-path: program
       bitcoin-network: testnet
@@ -155,7 +155,7 @@ Install it with `rustup toolchain install nightly`; Satellite's
 
 | Command | Usage | Description |
 | --- | --- | --- |
-| [`faucet`](#fund-an-account) | `arch-kit faucet --key <PATH>` | Create or fund an account using a non-mainnet faucet. |
+| [`faucet`](#fund-an-account) | `arch-kit faucet --key <PATH>` | Create or fund an account through the configured RPC faucet. |
 | [`transfer-arch`](#transfer-native-arch) | `arch-kit transfer-arch <DESTINATION> <AMOUNT> --signer <SOURCE>` | Transfer native ARCH to an account. |
 | [`arch-balance`](#inspect-native-arch) | `arch-kit arch-balance <ACCOUNT>` | Read an account's native ARCH balance. |
 
@@ -379,8 +379,19 @@ Create or top up an account through the configured network's faucet:
 arch-kit faucet --key ./keys/owner.key
 ```
 
-The command is unavailable on mainnet. It waits for funding to be processed
-and reports the resulting native ARCH balance.
+The command works on any configured network, including mainnet, when the RPC
+node enables its faucet. It waits for funding to be processed and reports the
+resulting native ARCH balance. For mainnet, select both the endpoint and signing
+network:
+
+```bash
+arch-kit --rpc-url https://rpc.mainnet.arch.network \
+  --bitcoin-network mainnet \
+  faucet --key ./keys/owner.key
+```
+
+The node must enable `create_account_with_faucet` for new accounts and
+`request_airdrop` for existing accounts.
 
 ## Transfer native ARCH
 
@@ -434,7 +445,8 @@ Useful deployment options:
 - `--fund-authority` tops up to an estimated ELF rent and upload-fee budget,
   reserving one extra faucet grant for optional IDL publication. Existing authority
   funds count toward the target; unusually large IDLs may need additional funds.
-  It is rejected on mainnet.
+  Supported on mainnet when the configured RPC node enables its faucet; use
+  `--bitcoin-network mainnet` with the mainnet RPC endpoint before `deploy`.
 - `--idl <PATH>` publishes or upgrades an IDL after deployment.
 - `--idl-size <BYTES>` sets the minimum IDL account size and requires `--idl`.
   Growing a populated account also requires `--allow-idl-resize`.

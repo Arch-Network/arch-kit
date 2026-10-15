@@ -125,9 +125,6 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
     println!("  Authority: {}", authority_pubkey);
 
     if args.fund_authority {
-        if config.network == bitcoin::Network::Bitcoin {
-            return Err(CliError::MainnetFaucetUnsupported);
-        }
         println!("Funding deployment authority through the faucet...");
         // Budget full program rent plus one fee per upload chunk and six setup/
         // activation signatures. Always keep one grant as a safety margin, plus

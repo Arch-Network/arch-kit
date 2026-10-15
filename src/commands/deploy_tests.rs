@@ -222,6 +222,12 @@ fn malformed_expected_program_id_fails_before_loading_files() {
 
 #[test]
 fn funding_scales_with_elf_size_and_skips_existing_funds() {
+    for network in [bitcoin::Network::Testnet, bitcoin::Network::Bitcoin] {
+        check_authority_funding(network);
+    }
+}
+
+fn check_authority_funding(network: bitcoin::Network) {
     for (elf_size, starting_balance, with_idl, grants) in [
         (1_000, 0, false, 2),
         (1_000_000, 0, false, 9),
@@ -266,7 +272,7 @@ fn funding_scales_with_elf_size_and_skips_existing_funds() {
         ));
         let (result, requests) = crate::test_rpc::run(replies, |config| {
             let config = Config {
-                network: bitcoin::Network::Testnet,
+                network,
                 ..config.clone()
             };
             run(&config, args)
