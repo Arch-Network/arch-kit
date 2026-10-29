@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 
 use crate::{
     commands::{
-        arch_balance, ata, build_idl, create_mint, deploy, encryption, faucet, init, keygen,
+        arch_balance, ata, build_idl, create_mint, deploy, encryption, faucet, idl, init, keygen,
         mint_info, mint_tokens, pubkey, token_account, token_accounts, token_balance,
         token_transfer, transfer_arch,
     },
@@ -51,6 +51,9 @@ pub(crate) enum Command {
 
     /// Deploy or update a program and optionally publish its IDL.
     Deploy(deploy::Args),
+
+    /// Publish, fetch, or check a deployed program's canonical on-chain IDL.
+    Idl(idl::Args),
 
     /// Generate one or more new secp256k1 secret key files.
     Keygen(keygen::Args),

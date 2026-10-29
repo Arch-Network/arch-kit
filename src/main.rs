@@ -81,5 +81,6 @@ fn run() -> Result<()> {
         Command::Deploy(args) => {
             commands::deploy::run(&network::config(rpc_url, bitcoin_network)?, args)
         }
+        Command::Idl(args) => commands::idl::run(&network::config(rpc_url, bitcoin_network)?, args),
     }
 }
