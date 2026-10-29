@@ -46,6 +46,28 @@ jobs:
             --bitcoin-network testnet \
             health
 
+      - name: Fetch and check a mainnet IDL (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # PropAMM's canonical IDL; both commands only read accounts.
+          program_id=4022dec7e57f757682712b45ddf13a8f324710f4637cefc0ebacc6343caab24c
+          idl_path="${RUNNER_TEMP}/propamm.idl.json"
+          kit=(./target/release/arch-kit
+            --rpc-url https://rpc.mainnet.arch.network
+            --bitcoin-network mainnet)
+
+          "${kit[@]}" idl fetch --program-id "${program_id}" > "${idl_path}"
+          jq -e '.metadata.name == "PropAMM"' "${idl_path}" >/dev/null
+          "${kit[@]}" idl check --idl "${idl_path}" --program-id "${program_id}"
+
+          jq '.errors[0].msg = "drifted"' "${idl_path}" > "${idl_path}.drifted"
+          if "${kit[@]}" idl check --idl "${idl_path}.drifted" --program-id "${program_id}"; then
+            echo "idl check accepted a drifted IDL" >&2
+            exit 1
+          fi
+
       - name: Vanity key generation round trip
         shell: bash
         run: |

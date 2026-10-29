@@ -1,5 +1,5 @@
 //! IDL publication against a scripted local RPC server; no chain or real keys.
-use arch_sdk::RuntimeTransaction;
+use arch_sdk::{RuntimeTransaction, arch_program::hash::Hash};
 use bitcoin::secp256k1::{Secp256k1, SecretKey};
 use serde_json::json;
 
@@ -89,6 +89,22 @@ fn run_publish(
     prepared: PreparedIdl,
     allow_resize: bool,
 ) -> (Result<()>, Vec<RuntimeTransaction>) {
+    run_publish_with(
+        replies,
+        prepared,
+        PublishOptions {
+            mode: PublishMode::Auto,
+            allow_resize,
+            dry_run: false,
+        },
+    )
+}
+
+fn run_publish_with(
+    replies: Vec<(&'static str, Value)>,
+    prepared: PreparedIdl,
+    options: PublishOptions,
+) -> (Result<()>, Vec<RuntimeTransaction>) {
     let (result, requests) = crate::test_rpc::run(replies, |config| {
         publish(
             config,
@@ -96,7 +112,7 @@ fn run_publish(
             authority(),
             authority_keypair(),
             prepared,
-            allow_resize,
+            options,
         )
     });
     let transactions = requests
@@ -399,5 +415,117 @@ fn invalid_backup_stops_before_clearing_the_canonical_idl() {
     assert_ne!(
         transactions[0].message.account_keys[copy.accounts[1] as usize],
         canonical
+    );
+}
+
+fn not_found() -> (&'static str, Value) {
+    (
+        "read_account_info",
+        json!({"error": {"code": 404, "message": "Account not found"}}),
+    )
+}
+
+fn options(mode: PublishMode, allow_resize: bool, dry_run: bool) -> PublishOptions {
+    PublishOptions {
+        mode,
+        allow_resize,
+        dry_run,
+    }
+}
+
+#[test]
+fn init_mode_refuses_an_existing_idl_and_upgrade_mode_a_missing_one() {
+    let existing = account(&prepared(None), 10_000);
+    for dry_run in [false, true] {
+        let (result, transactions) = run_publish_with(
+            vec![read_reply(&existing)],
+            updated(),
+            options(PublishMode::Init, false, dry_run),
+        );
+        assert!(result.unwrap_err().to_string().contains("--mode upgrade"));
+        assert!(transactions.is_empty());
+
+        let (result, transactions) = run_publish_with(
+            vec![not_found()],
+            updated(),
+            options(PublishMode::Upgrade, false, dry_run),
+        );
+        assert!(result.unwrap_err().to_string().contains("--mode init"));
+        assert!(transactions.is_empty());
+    }
+}
+
+#[test]
+fn upgrade_mode_upgrades_an_existing_idl() {
+    let new = updated();
+    let mut replies = vec![read_reply(&account(&prepared(None), 10_000))];
+    let chunks = new.compressed.chunks(MAX_WRITE_SIZE).count();
+    for _ in 0..chunks + 2 {
+        replies.extend(successful_transaction());
+    }
+    replies.push(read_reply(&account(&new, 10_000)));
+    let (result, transactions) =
+        run_publish_with(replies, new, options(PublishMode::Upgrade, false, false));
+    result.unwrap();
+    assert_eq!(transactions.len(), chunks + 2);
+}
+
+// The script holds only the IDL read: any blockhash request, transaction, or
+// post-publication read would fail the test.
+#[test]
+fn dry_run_reads_the_idl_account_and_sends_nothing() {
+    let old = prepared(None);
+    let existing = account(&old, required_space(old.compressed.len()).unwrap());
+    for (reply, prepared, allow_resize) in [
+        (not_found(), prepared(Some(25_000)), false),
+        (read_reply(&account(&old, 10_000)), updated(), false),
+        (read_reply(&existing), updated(), true),
+        (read_reply(&existing), prepared(Some(25_000)), true),
+        (read_reply(&existing), prepared(None), false),
+    ] {
+        let (result, requests) = crate::test_rpc::run(vec![reply], |config| {
+            publish(
+                config,
+                program(),
+                authority(),
+                authority_keypair(),
+                prepared,
+                options(PublishMode::Auto, allow_resize, true),
+            )
+        });
+        result.unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0]["method"], "read_account_info");
+    }
+}
+
+#[test]
+fn dry_run_still_rejects_what_a_real_publish_would() {
+    let old = prepared(None);
+    let existing = account(&old, required_space(old.compressed.len()).unwrap());
+    let (result, _) = run_publish_with(
+        vec![read_reply(&existing)],
+        updated(),
+        options(PublishMode::Auto, false, true),
+    );
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("--allow-idl-resize")
+    );
+
+    let mut foreign = account(&old, 10_000);
+    foreign.data[8..40].fill(9);
+    let (result, _) = run_publish_with(
+        vec![read_reply(&foreign)],
+        updated(),
+        options(PublishMode::Auto, false, true),
+    );
+    assert!(
+        result
+            .unwrap_err()
+            .to_string()
+            .contains("authority mismatch")
     );
 }

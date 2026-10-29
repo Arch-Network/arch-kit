@@ -6,6 +6,7 @@ pub(crate) mod deploy;
 pub(crate) mod encryption;
 pub(crate) mod faucet;
 pub(crate) mod health;
+pub(crate) mod idl;
 pub(crate) mod init;
 pub(crate) mod keygen;
 pub(crate) mod mint_info;

@@ -193,7 +193,11 @@ pub(crate) fn run(config: &Config, args: Args) -> Result<()> {
             authority_pubkey,
             authority_keypair,
             prepared,
-            args.allow_idl_resize,
+            idl::PublishOptions {
+                mode: idl::PublishMode::Auto,
+                allow_resize: args.allow_idl_resize,
+                dry_run: false,
+            },
         )
     {
         return Err(CliError::IdlAfterDeployment {

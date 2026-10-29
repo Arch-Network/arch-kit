@@ -45,8 +45,8 @@ Every published version also has a prebuilt binary on its GitHub release
 from the release notes:
 
 ```bash
-ARCH_KIT_VERSION=0.1.9
-ARCH_KIT_SHA256=<SHA-256 from the v0.1.9 release notes>
+ARCH_KIT_VERSION=0.1.10
+ARCH_KIT_SHA256=<SHA-256 from the v0.1.10 release notes>
 name="arch-kit-${ARCH_KIT_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
 curl -fsSLO "https://github.com/Arch-Network/arch-kit/releases/download/v${ARCH_KIT_VERSION}/${name}"
 echo "${ARCH_KIT_SHA256}  ${name}" | sha256sum -c -
@@ -63,7 +63,7 @@ with the reusable workflow:
 ```yaml
 jobs:
   deploy:
-    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.9
+    uses: Arch-Network/arch-kit/.github/workflows/deploy-program.yml@v0.1.10
     with:
       program-path: program
       bitcoin-network: testnet
@@ -127,6 +127,9 @@ Install it with `rustup toolchain install nightly`; Satellite's
 | [`init`](#initialize-a-program) | `arch-kit init <PATH> --program-key <PATH>` | Initialize a new Satellite Hello World program. |
 | [`build-idl`](#build-a-program-idl) | `arch-kit build-idl <PROGRAM_PATH> <OUTPUT>` | Build a Satellite program's IDL JSON. |
 | [`deploy`](#deploy-a-program) | `arch-kit deploy [OPTIONS]` | Deploy or update a program and its IDL. |
+| [`idl publish`](#publish-the-idl-of-a-deployed-program) | `arch-kit idl publish --program-id <PUBKEY> --idl <PATH> --authority <PATH>` | Initialize or upgrade a deployed program's IDL without redeploying it. |
+| [`idl fetch`](#fetch-and-check-an-on-chain-idl) | `arch-kit idl fetch --program-id <PUBKEY>` | Print a program's on-chain IDL as JSON. |
+| [`idl check`](#fetch-and-check-an-on-chain-idl) | `arch-kit idl check --idl <PATH> --program-id <PUBKEY>` | Fail unless the on-chain IDL matches a local file. |
 
 ### Key management
 
@@ -221,7 +224,8 @@ cargo build-sbf --manifest-path ./hello-world/Cargo.toml
 
 ## Build a program IDL
 
-Generate the Satellite IDL JSON before publishing it with `deploy --idl`:
+Generate the Satellite IDL JSON before publishing it with `deploy --idl` or
+`idl publish`:
 
 ```bash
 arch-kit build-idl ./hello-world ./target/idl/hello_world.json
@@ -465,6 +469,53 @@ IDL intact. The temporary resize buffers are closed after the final growth
 step, returning their rent to the authority. The CLI verifies the restored IDL
 before publishing an update. If IDL publication fails, the deployed program
 remains deployed and its program ID is included in the error.
+
+## Publish the IDL of a deployed program
+
+`idl publish` initializes or upgrades the canonical IDL of a program that is
+already deployed, without touching its ELF. It uses the same IDL account
+protocol, normalization, capacity rules, and resize behavior as `deploy --idl`,
+and the same top-level `--rpc-url` and `--bitcoin-network` settings:
+
+```bash
+arch-kit --rpc-url https://rpc.mainnet.arch.network --bitcoin-network mainnet \
+  idl publish \
+  --program-id <PUBKEY> \
+  --idl ./target/idl/program.json \
+  --authority ./keys/authority.key \
+  --dry-run
+```
+
+- `--program-id <PUBKEY>` accepts Base58 or 64-character hex. The command fails
+  unless it names an executable program account.
+- `--authority <PATH>` is the IDL authority key file; it signs and pays for
+  every IDL transaction. Upgrades require it to match the authority stored in
+  the existing IDL account.
+- `--mode init|upgrade|auto` (default `auto`): `init` fails if the IDL account
+  already exists, `upgrade` fails if it does not, and `auto` creates or
+  upgrades as needed.
+- `--dry-run` reads the IDL account, applies every check above, and prints the
+  IDL account and base addresses, followed by each transaction's instructions
+  (program, accounts with writable/signer flags, and data in hex). It sends
+  nothing. The authority key is still read to derive its public key.
+- `--idl-size <BYTES>` and `--allow-idl-resize` behave as for `deploy`.
+
+An IDL that is already current sends no transactions. The canonical IDL address
+is `create_with_seed(base, "anchor:idl", program)`, where `base` is the
+program's seedless PDA.
+
+## Fetch and check an on-chain IDL
+
+```bash
+arch-kit idl fetch --program-id <PUBKEY> > program.json
+arch-kit idl check --idl ./target/idl/program.json --program-id <PUBKEY>
+```
+
+`idl fetch` decodes the canonical IDL account and prints its JSON. `idl check`
+normalizes the local file as publication would (its `address` becomes the
+program ID and `metadata.spec` becomes `0.1.0`) and exits non-zero, naming the
+differing top-level fields, when the on-chain IDL differs or is missing. Run it
+in CI after each deployment to catch an IDL that drifted from the program.
 
 ## Publishing arch-kit
 
